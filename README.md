@@ -1,2 +1,2 @@
 # Data_Structure_Curriculum_Design
-数据结构课程设计作业
+数据结构课程设计
