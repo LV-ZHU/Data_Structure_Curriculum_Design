@@ -3,7 +3,7 @@
 using namespace std;
 
 const int max_vertices = 100; //最多100个顶点
-int vertex_number = 0;//当前实际顶点数量，初始还没加站点所以为0
+
 enum class edge_type { METRO, BUS, TRANSFER };//边类型：地铁，公交，换乘
 enum class station_type{METRO, BUS};//站点类型:地铁，公交
 
@@ -99,39 +99,34 @@ void output_one_step_vertex(vertex& start_station)
   函数名称：add_vertex
   功    能：加入新顶点
   输入参数：vertex vertices[max_vertices]:顶点数组
-  当前顶点数量的引用
-  vertex_name：站点名称
+  int& vertex_number：当前顶点数量的引用，实时修改所以使用引用
+  string vertex_name：站点名称
   station_type type：站点类型
   返 回 值：true(1)为正常，false(0)为已经放满
-  说    明：
+  说    明：先添加，再自增，从0开始
 ***************************************************************************/
-bool add_vertex(vertex vertices[max_vertices], string vertex_name, station_type type)
+bool add_vertex(vertex vertices[max_vertices], int& vertex_number,string vertex_name, station_type type)
 {
-	//new?，赋值？
-	while (vertices[vertex_number].name != "")//防止越界
-		vertex_number++;
-	if (vertex_number > max_vertices)
-		return false;
-	else
+	if (vertex_number >= max_vertices)
+		return false;//超额，添加失败
+	else {
+		vertices[vertex_number].id = vertex_number;//id即为当前号码
+		vertices[vertex_number].name = vertex_name;
+		vertices[vertex_number].type= type;
+		vertex_number++;//全添加完再自增
 		return true;
+	}	
 }
 
 int main()
 {
 	cout << "Transit Navigator started." << endl;
 	vertex vertices[max_vertices];
-	vertices[0].id = 0;
-	vertices[0].name = "Tongji University";
-	vertices[0].type = station_type::METRO;
-	vertices[1].id = 1;
-	vertices[1].name = "Siping Road";
-	vertices[1].type = station_type::METRO;
-	vertices[2].id = 2;
-	vertices[2].name = "Guokang Road Siping Road";
-	vertices[2].type = station_type::BUS;
-	
-	
-	
+
+	int vertex_number = 0;//当前实际顶点数量，初始还没加站点所以为0
+	add_vertex(vertices, vertex_number, "Tongji University", station_type::METRO);
+	add_vertex(vertices, vertex_number, "Siping Road", station_type::METRO);
+	add_vertex(vertices, vertex_number, "Guokang Road Siping Road", station_type::BUS);
 
 	add_undirected_edge(vertices[0], vertices[1], 3, 0.3, edge_type::METRO);
 	add_undirected_edge(vertices[0], vertices[2], 6, 0, edge_type::TRANSFER);
