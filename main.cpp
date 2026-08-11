@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <climits>
 using namespace std;
 
 const int max_vertices = 100; //最多100个顶点
@@ -9,18 +10,29 @@ enum class station_type{METRO, BUS};//站点类型:地铁，公交
 
 //边结构体，E
 struct edge_node {
-	int to;//目标顶点编号
-	int time_cost;//这条边记录的耗时
-	double fare_cost;//费用
-	edge_type type;//边的类型
+	int to = INT_MAX;//目标顶点编号
+	int time_cost = INT_MAX;//这条边记录的耗时
+	double fare_cost = 0;//费用
+	edge_type type = edge_type::METRO;//边的类型，默认为地铁
 	edge_node* next = nullptr;//指向同一邻接链表中的下一个边结点
 };
 //顶点结构体，V
 struct vertex {
-	int id;//站点编号
+	int id = INT_MAX;//站点编号
 	string name = "";//站点名称
-	station_type type;//站点类型
+	station_type type = station_type::METRO;//站点类型，默认为地铁
 	edge_node* first_edge = nullptr;//邻接链表的第一个边节点地址
+};
+//候选顶点及其距离结构体
+struct heap_node {
+	int vertex_id;//顶点编号
+	double distance;//当前距离
+};
+//最小堆
+struct min_heap {
+	heap_node* data = nullptr;//当前指向元素位置
+	int size = 0;//当前实际存有的堆元素数量
+	int capacity = 0;//当前数组最多能容纳多少个元素，应该始终满足0≤size≤capacity
 };
 
 /***************************************************************************
@@ -118,6 +130,40 @@ bool add_vertex(vertex vertices[max_vertices], int& vertex_number,string vertex_
 	}	
 }
 
+/***************************************************************************
+  函数名称：initialize_heap
+  功    能：初始化最小堆
+  输入参数：min_heap& heap：需要改变成最小堆的堆
+  int initial_capacity：初始容量
+  返 回 值：false表示失败，true表示成功
+  说    明：
+***************************************************************************/
+bool initialize_heap(min_heap& heap,int initial_capacity)
+{
+	if (initial_capacity <= 0|| heap.data)
+		return false;
+	heap_node* p = new heap_node[initial_capacity];
+	heap.data = p;
+	heap.size = 0;
+	heap.capacity = initial_capacity;
+	return true;
+}
+
+/***************************************************************************
+  函数名称：release_heap
+  功    能：释放整个堆
+  输入参数：min_heap& heap：需要释放的堆
+  返 回 值：无
+  说    明：先释放动态内存申请的数组，然后重置结构体里各个成员的值
+***************************************************************************/
+void release_heap(min_heap& heap) 
+{
+	delete[] heap.data;
+	heap.data = nullptr;
+	heap.size = 0;
+	heap.capacity = 0;
+}
+
 int main()
 {
 	cout << "Transit Navigator started." << endl;
@@ -127,6 +173,8 @@ int main()
 	add_vertex(vertices, vertex_number, "Tongji University", station_type::METRO);
 	add_vertex(vertices, vertex_number, "Siping Road", station_type::METRO);
 	add_vertex(vertices, vertex_number, "Guokang Road Siping Road", station_type::BUS);
+
+	cout << vertex_number << endl;
 
 	add_undirected_edge(vertices[0], vertices[1], 3, 0.3, edge_type::METRO);
 	add_undirected_edge(vertices[0], vertices[2], 6, 0, edge_type::TRANSFER);
