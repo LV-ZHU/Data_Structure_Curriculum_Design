@@ -20,6 +20,22 @@ struct vertex {
 	edge_node* first_edge = nullptr;//邻接链表的第一个边节点地址
 };
 
+/***************************************************************************
+  函数名称：add_edge
+  功    能：添加一条边，由于添加的是有向边，在无向边情况下两个方向各调用一次该函数
+  输入参数：vertex& from_vertex：要修改的顶点，
+	int to：目标顶点编号；
+	int time_cost：耗时；
+	double fare_cost：费用；
+	edge_type type：边类型
+  返 回 值：空
+  说    明：修改来源顶点的 first_edge，把新边插入邻接链表
+***************************************************************************/
+void add_edge(vertex& from_vertex, int to, int time_cost, double fare_cost, edge_type type) {
+	edge_node* new_edge = new edge_node;
+
+}
+
 
 int main()
 {
@@ -40,6 +56,13 @@ int main()
 	edge_a_to_b.fare_cost = 0.3;
 	edge_a_to_b.type = edge_type::METRO;
 	station_a.first_edge = &edge_a_to_b;
+
+	edge_node edge_b_to_a;
+	edge_b_to_a.to = 0;
+	edge_b_to_a.time_cost = 3;
+	edge_b_to_a.fare_cost = 0.3;
+	edge_b_to_a.type = edge_type::METRO;
+	station_b.first_edge = &edge_b_to_a;
 
 	edge_node edge_a_to_c;
 	edge_a_to_c.to = 2;
