@@ -2,6 +2,8 @@
 #include <string>
 using namespace std;
 
+const int max_vertices = 100; //最多100个顶点
+int vertex_number = 0;//当前实际顶点数量，初始还没加站点所以为0
 enum class edge_type { METRO, BUS, TRANSFER };//边类型：地铁，公交，换乘
 enum class station_type{METRO, BUS};//站点类型:地铁，公交
 
@@ -16,7 +18,7 @@ struct edge_node {
 //顶点结构体，V
 struct vertex {
 	int id;//站点编号
-	string name;//站点名称
+	string name = "";//站点名称
 	station_type type;//站点类型
 	edge_node* first_edge = nullptr;//邻接链表的第一个边节点地址
 };
@@ -72,41 +74,71 @@ void release_edges(vertex& release_vertex)
 	}
 }
 
-int main()
+/***************************************************************************
+  函数名称：output_one_step_vertex
+  功    能：输出从start_station开始所有的邻居
+  输入参数：start_station：开始的车站
+  返 回 值：空
+  说    明：依次遍历开始站点的邻接表
+***************************************************************************/
+void output_one_step_vertex(vertex& start_station)
 {
-	cout << "Transit Navigator started." << endl;
-	vertex station_a;
-	station_a.id = 0;
-	station_a.name = "Tongji University";
-	station_a.type = station_type::METRO;
-	
-	vertex station_b;
-	station_b.id = 1;
-	station_b.name = "Siping Road";
-	station_b.type = station_type::METRO;
-
-	vertex station_c;
-	station_c.id = 2;
-	station_c.name = "Guokang Road Siping Road";
-	station_c.type = station_type::BUS;
-
-	add_undirected_edge(station_a, station_b, 3, 0.3, edge_type::METRO);
-	add_undirected_edge(station_a, station_c, 6, 0, edge_type::TRANSFER);
-	
-
-
-	if (station_a.first_edge == nullptr)
+	if (start_station.first_edge == nullptr)
 		cout << "该节点为孤立顶点，当前站点暂无可用路线" << endl;
 	else {
-		edge_node* current_edge = station_a.first_edge;//指针从站点第一个节点开始
+		edge_node* current_edge = start_station.first_edge;//指针从站点第一个节点开始
 		while (current_edge) {
 			cout << current_edge->to << " ";
 			current_edge = current_edge->next;
 		}
+		cout << endl;
 	}
-	release_edges(station_a);
-	release_edges(station_b);
+}
 
+/***************************************************************************
+  函数名称：add_vertex
+  功    能：加入新顶点
+  输入参数：vertex vertices[max_vertices]:顶点数组
+  当前顶点数量的引用
+  vertex_name：站点名称
+  station_type type：站点类型
+  返 回 值：true(1)为正常，false(0)为已经放满
+  说    明：
+***************************************************************************/
+bool add_vertex(vertex vertices[max_vertices], string vertex_name, station_type type)
+{
+	//new?，赋值？
+	while (vertices[vertex_number].name != "")//防止越界
+		vertex_number++;
+	if (vertex_number > max_vertices)
+		return false;
+	else
+		return true;
+}
+
+int main()
+{
+	cout << "Transit Navigator started." << endl;
+	vertex vertices[max_vertices];
+	vertices[0].id = 0;
+	vertices[0].name = "Tongji University";
+	vertices[0].type = station_type::METRO;
+	vertices[1].id = 1;
+	vertices[1].name = "Siping Road";
+	vertices[1].type = station_type::METRO;
+	vertices[2].id = 2;
+	vertices[2].name = "Guokang Road Siping Road";
+	vertices[2].type = station_type::BUS;
+	
+	
+	
+
+	add_undirected_edge(vertices[0], vertices[1], 3, 0.3, edge_type::METRO);
+	add_undirected_edge(vertices[0], vertices[2], 6, 0, edge_type::TRANSFER);
+	for (int i = 0; i < vertex_number; i++)
+		output_one_step_vertex(vertices[i]);
+	for (int i = 0; i < vertex_number; i++)
+		release_edges(vertices[i]);
 
 	return 0;
 }
