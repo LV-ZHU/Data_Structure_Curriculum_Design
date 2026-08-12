@@ -170,6 +170,47 @@ bool insert_heap(min_heap& heap, int vertex_id, double distance)
 }
 
 /***************************************************************************
+  函数名称：swap_heap_node
+  功    能：交换两个堆结点，连带着顶点编号和当前距离两个结构体成员一起交换
+  输入参数：heap_node& node1, heap_node& node2：需要交换的两个堆结点，交换后node1、node2所有成员互换
+  返 回 值：无
+  说    明：注意要同时交换结构体里的编号和距离确保依然匹配，由于结构体里只有普通成员，也可以直接交换整个结构体，可用自带swap
+***************************************************************************/
+void swap_heap_node(heap_node& node1, heap_node& node2)
+{
+	heap_node tmp;
+
+	tmp.vertex_id = node1.vertex_id;
+	tmp.distance = node1.distance;
+	node1.vertex_id = node2.vertex_id;
+	node1.distance = node2.distance;
+	node2.vertex_id = tmp.vertex_id;
+	node2.distance = tmp.distance;
+}
+
+/***************************************************************************
+  函数名称：sift_up
+  功    能：上浮单个位置的节点，和父节点进行大小关系判断
+  输入参数：min_heap& heap：需要改变的堆，int index：需要判断是否交换的下标
+  返 回 值：无
+  说    明：index = father配合while语句可以实现逐层检查直至堆顶
+***************************************************************************/
+void sift_up(min_heap& heap, int index)
+{
+	while (index > 0) {
+		int father = (index - 1) / 2;
+		double father_distance = heap.data[father].distance;
+		double index_distance = heap.data[index].distance;
+		if (father_distance > index_distance) {
+			swap_heap_node(heap.data[father], heap.data[index]);
+			index = father;//如果交换，交换后将index赋值为父节点的值
+		}
+		else
+			break;//该节点已经到了正确的位置上
+	}
+}
+
+/***************************************************************************
   函数名称：release_heap
   功    能：释放整个堆
   输入参数：min_heap& heap：需要释放的堆
@@ -183,6 +224,7 @@ void release_heap(min_heap& heap)
 	heap.size = 0;
 	heap.capacity = 0;
 }
+
 
 /***************************************************************************
   函数名称：
@@ -212,11 +254,22 @@ int main()
 
 	if (test_mode){
 		min_heap test_why_need_heapify;
-		initialize_heap(test_why_need_heapify, 3);
-		insert_heap(test_why_need_heapify, 2, 6.0);
-		insert_heap(test_why_need_heapify, 1, 3.0);
-		cout << test_why_need_heapify.data[0].vertex_id << " " << test_why_need_heapify.data[0].distance << endl
-			<< test_why_need_heapify.data[1].vertex_id << " " << test_why_need_heapify.data[1].distance << endl;
+		initialize_heap(test_why_need_heapify, 8);
+		insert_heap(test_why_need_heapify, 0, 2);
+		insert_heap(test_why_need_heapify, 1, 5);
+		insert_heap(test_why_need_heapify, 2, 3);
+		insert_heap(test_why_need_heapify, 3, 8);
+		insert_heap(test_why_need_heapify, 4, 4);
+		insert_heap(test_why_need_heapify, 5, 9);
+		insert_heap(test_why_need_heapify, 6, 1);
+
+		cout << "交换前：";
+		for (int i = 0; i < 7; i++)
+			cout << test_why_need_heapify.data[i].vertex_id << " " << test_why_need_heapify.data[i].distance << endl;
+		sift_up(test_why_need_heapify, 6); 
+		cout << "交换后：";
+		for (int i = 0; i < 7; i++)
+			cout << test_why_need_heapify.data[i].vertex_id << " " << test_why_need_heapify.data[i].distance << endl; 
 		release_heap(test_why_need_heapify);
 	}
 
