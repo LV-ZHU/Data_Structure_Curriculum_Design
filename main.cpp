@@ -206,12 +206,80 @@ bool insert_heap(min_heap& heap, int vertex_id, double distance)
 		return false;
 	(heap.data + heap.size)->vertex_id = vertex_id;//等价于(*(heap.data + heap.size)).vertex_id或是heap.data[heap.size].vertex_id
 	(heap.data + heap.size)->distance = distance;
-	sift_up(heap, heap.size);
 	heap.size++;//插入完后实际数量加1
+	sift_up(heap, heap.size - 1);//这里不和上一行换顺序是因为要把新元素正式纳入有效范围
 	return true;
 }
 
+/***************************************************************************
+  函数名称：sift_down
+  功    能：下沉单个位置的节点，和子节点进行大小关系判断
+  输入参数：min_heap& heap：需要改变的堆，int index：需要判断是否交换的下标
+  返 回 值：无
+  说    明：index = left_child/right_child;配合while语句可以实现逐层检查直至叶子节点
+***************************************************************************/
+void sift_down(min_heap& heap, int index)
+{
+	while (2 * index + 1 < heap.size) { //左孩子在下标0..(heap.size-1)范围内
+		int left_child = 2 * index + 1;
+		int right_child = 2 * index + 2;
+		double left_child_distance = heap.data[left_child].distance;
+		double index_distance = heap.data[index].distance;
+		if (right_child >= heap.size) {//这个时候只有左孩子
+			if (index_distance > left_child_distance) {
+				swap_heap_node(heap.data[left_child], heap.data[index]);
+				index = left_child;
+			}
+			break;//堆是完全二叉树，唯一的左孩子必然是最后一个元素也是叶子结点，所以处理完它之后无论是否交换，本轮下沉都已经结束，而不是else
+		}
+		double right_child_distance = heap.data[right_child].distance;//有右孩子才能拿对应下标
+		if (index_distance < left_child_distance && index_distance < right_child_distance)//父最小，已到位
+			break;
+		else if (left_child_distance <= right_child_distance) {//左不超过右侧，父节点和较小的左换
+			swap_heap_node(heap.data[left_child], heap.data[index]);
+			index = left_child;
+		}
+		else {//换父和右
+			swap_heap_node(heap.data[right_child], heap.data[index]);
+			index = right_child;
+		}
+	}
+}
 
+/***************************************************************************
+  函数名称：is_heap_empty
+  功    能：检查堆是否是空堆
+  输入参数：const min_heap &heap：需要检查的堆，不用修改，由于只传值会复制data指针、size和capacity故采用const限定
+  返 回 值：true代表确实空，false代表并不空
+  说    明：只根据size是否为0判断，不根据data判断，因为已经初始化但没有元素时，data不为空但堆仍然是空堆。
+***************************************************************************/
+bool is_heap_empty(const min_heap &heap)
+{
+	if (heap.size == 0)
+		return true;
+	else
+		return false;
+}
+
+/***************************************************************************
+  函数名称：extract_min
+  功    能：弹出最小元素，需要1.删除堆顶，2.把原堆顶的heap_node交给调用者
+  输入参数：min_heap& heap：需要弹出的堆
+  heap_node &minimum_node：用于放原堆顶的heap_node
+  返 回 值：false代表弹出失败，true代表成功
+  说    明：
+***************************************************************************/
+bool extract_min(min_heap& heap, heap_node& minimum_node)
+{
+	if (is_heap_empty(heap))
+		return false;
+	minimum_node = heap.data[0];//存放堆顶元素
+	heap.data[0] = heap.data[heap.size - 1];
+	heap.size--;//位置-1
+	sift_down(heap, 0);//从堆顶开始下沉
+
+	return true;
+}
 
 /***************************************************************************
   函数名称：release_heap
@@ -266,10 +334,11 @@ int main()
 		insert_heap(test_why_need_heapify, 5, 4);
 		insert_heap(test_why_need_heapify, 6, 1);
 
-		for (int i = 0; i < 7; i++)
-			cout << test_why_need_heapify.data[i].vertex_id << " " << test_why_need_heapify.data[i].distance << endl;
-		
-	 
+		while (is_heap_empty) {//只要还没空，就一直取元素，相比直接判断size在忘记extract_min会自动--的时候额外加了一行test_why_need_heapify.size--且初始size为奇数时不会死循环
+			heap_node min;
+			extract_min(test_why_need_heapify, min);
+			cout << "本轮取出的堆顶元素序号和距离是：" << min.vertex_id << " " << min.distance << endl;
+		}
 		release_heap(test_why_need_heapify);
 	}
 
