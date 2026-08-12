@@ -3,6 +3,7 @@
 #include <climits>
 using namespace std;
 
+#define test_mode true
 const int max_vertices = 100; //最多100个顶点
 
 enum class edge_type { METRO, BUS, TRANSFER };//边类型：地铁，公交，换乘
@@ -31,7 +32,7 @@ struct heap_node {
 //最小堆
 struct min_heap {
 	heap_node* data = nullptr;//当前指向元素位置
-	int size = 0;//当前实际存有的堆元素数量
+	int size = 0;//当前实际存有的堆元素数量，用来控制下标小于size防止读取时越界
 	int capacity = 0;//当前数组最多能容纳多少个元素，应该始终满足0≤size≤capacity
 };
 
@@ -140,12 +141,31 @@ bool add_vertex(vertex vertices[max_vertices], int& vertex_number,string vertex_
 ***************************************************************************/
 bool initialize_heap(min_heap& heap,int initial_capacity)
 {
-	if (initial_capacity <= 0|| heap.data)
+	if (initial_capacity <= 0|| heap.data)//容量非正或data已经存放了地址
 		return false;
 	heap_node* p = new heap_node[initial_capacity];
-	heap.data = p;
+	heap.data = p;//data字段指向动态堆数组的第一个元素
 	heap.size = 0;
 	heap.capacity = initial_capacity;
+	return true;
+}
+
+/***************************************************************************
+  函数名称：insert_heap
+  功    能：在堆中插入某个元素（不包括重新堆排序）
+  输入参数：min_heap& heap：需要插入的堆
+   int vertex_id：插入顶点的编号
+   double distance：插入顶点的当前距离
+  返 回 值：false代表插入失败，true代表成功
+  说    明：heap.size >= heap.capacity指没空余容量；!heap.data表明堆当前没有动态数组，通常因为initialize_heap初始化失败
+***************************************************************************/
+bool insert_heap(min_heap& heap, int vertex_id, double distance)
+{
+	if (heap.size >= heap.capacity || !heap.data )
+		return false;
+	(heap.data + heap.size)->vertex_id = vertex_id;//等价于(*(heap.data + heap.size)).vertex_id或是heap.data[heap.size].vertex_id
+	(heap.data + heap.size)->distance = distance;
+	heap.size++;//插入完后实际数量加1
 	return true;
 }
 
@@ -154,7 +174,7 @@ bool initialize_heap(min_heap& heap,int initial_capacity)
   功    能：释放整个堆
   输入参数：min_heap& heap：需要释放的堆
   返 回 值：无
-  说    明：先释放动态内存申请的数组，然后重置结构体里各个成员的值
+  说    明：先释放data对象动态内存申请的数组，然后重置结构体里各个成员的值
 ***************************************************************************/
 void release_heap(min_heap& heap) 
 {
@@ -164,9 +184,16 @@ void release_heap(min_heap& heap)
 	heap.capacity = 0;
 }
 
+/***************************************************************************
+  函数名称：
+  功    能：
+  输入参数：
+  返 回 值：
+  说    明：
+***************************************************************************/
 int main()
 {
-	cout << "Transit Navigator started." << endl;
+	if (test_mode) cout << "Transit Navigator started." << endl;
 	vertex vertices[max_vertices];
 
 	int vertex_number = 0;//当前实际顶点数量，初始还没加站点所以为0
@@ -174,7 +201,7 @@ int main()
 	add_vertex(vertices, vertex_number, "Siping Road", station_type::METRO);
 	add_vertex(vertices, vertex_number, "Guokang Road Siping Road", station_type::BUS);
 
-	cout << vertex_number << endl;
+	if (test_mode) cout << vertex_number << endl;
 
 	add_undirected_edge(vertices[0], vertices[1], 3, 0.3, edge_type::METRO);
 	add_undirected_edge(vertices[0], vertices[2], 6, 0, edge_type::TRANSFER);
@@ -182,6 +209,16 @@ int main()
 		output_one_step_vertex(vertices[i]);
 	for (int i = 0; i < vertex_number; i++)
 		release_edges(vertices[i]);
+
+	if (test_mode){
+		min_heap test_why_need_heapify;
+		initialize_heap(test_why_need_heapify, 3);
+		insert_heap(test_why_need_heapify, 2, 6.0);
+		insert_heap(test_why_need_heapify, 1, 3.0);
+		cout << test_why_need_heapify.data[0].vertex_id << " " << test_why_need_heapify.data[0].distance << endl
+			<< test_why_need_heapify.data[1].vertex_id << " " << test_why_need_heapify.data[1].distance << endl;
+		release_heap(test_why_need_heapify);
+	}
 
 	return 0;
 }
