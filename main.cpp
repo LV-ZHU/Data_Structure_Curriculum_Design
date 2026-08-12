@@ -1,9 +1,10 @@
 #include <iostream>
 #include <string>
 #include <climits>
+#include <limits>
 using namespace std;
 
-#define test_mode true
+#define test_mode 1
 const int max_vertices = 100; //最多100个顶点
 
 enum class edge_type { METRO, BUS, TRANSFER };//边类型：地铁，公交，换乘
@@ -13,7 +14,7 @@ enum class station_type{METRO, BUS};//站点类型:地铁，公交
 struct edge_node {
 	int to = INT_MAX;//目标顶点编号
 	int time_cost = INT_MAX;//这条边记录的耗时
-	double fare_cost = 0;//费用
+	double fare_cost = INFINITY;//费用
 	edge_type type = edge_type::METRO;//边的类型，默认为地铁
 	edge_node* next = nullptr;//指向同一邻接链表中的下一个边结点
 };
@@ -323,6 +324,18 @@ void release_heap(min_heap& heap)
 }
 
 /***************************************************************************
+  函数名称：calculate_weight
+  功    能：按照W=time_cost+k×fare_cost计算权重
+  输入参数：const edge_node& node：需要计算权重的边，double k：预设的倾向于费用还是倾向于时间的比例
+  返 回 值：算式的结果
+  说    明：由于不用修改node且为结构体，所以用常量引用
+***************************************************************************/
+double calculate_weight(const edge_node& node, double k) 
+{
+	return node.time_cost + k * node.fare_cost;
+}
+
+/***************************************************************************
   函数名称：
   功    能：
   输入参数：
@@ -331,7 +344,6 @@ void release_heap(min_heap& heap)
 ***************************************************************************/
 int main()
 {
-	if (test_mode) cout << "Transit Navigator started." << endl;
 	vertex vertices[max_vertices];
 
 	int vertex_number = 0;//当前实际顶点数量，初始还没加站点所以为0
@@ -339,7 +351,9 @@ int main()
 	add_vertex(vertices, vertex_number, "Siping Road", station_type::METRO);
 	add_vertex(vertices, vertex_number, "Guokang Road Siping Road", station_type::BUS);
 
-	if (test_mode) cout << vertex_number << endl;
+#if test_mode
+	cout << vertex_number << endl;
+#endif
 
 	add_undirected_edge(vertices[0], vertices[1], 3, 0.3, edge_type::METRO);
 	add_undirected_edge(vertices[0], vertices[2], 6, 0, edge_type::TRANSFER);
@@ -348,28 +362,45 @@ int main()
 	for (int i = 0; i < vertex_number; i++)
 		release_edges(vertices[i]);
 
-	if (test_mode){
-		min_heap test;
-		initialize_heap(test, 2);
-		insert_heap(test, 0, 2);
-		insert_heap(test, 1, 5);
-		insert_heap(test, 2, 3);
-		cout << "测试扩容功能，当前size和capacity分别是：" << test.size << " " << test.capacity << endl;
-		insert_heap(test, 3, 8);
-		insert_heap(test, 4, 9);
-		insert_heap(test, 5, 4);
-		insert_heap(test, 6, 1);
-		cout << "测试扩容功能，当前size和capacity分别是：" << test.size << " " << test.capacity << endl;
-		
-		while (!is_heap_empty(test)) {//只要还没空，就一直取元素，相比直接判断size在忘记extract_min会自动--的时候额外加了一行test.size--且初始size为奇数时不会死循环
-			heap_node min;
-			extract_min(test, min);
-			cout << "本轮取出的堆顶元素序号和距离是：" << min.vertex_id << " " << min.distance << endl;
-		}
-		heap_node empty;
-		cout << "测试空堆弹出是否正常，0是对的：" << extract_min(test, empty);
-		release_heap(test);
+#if test_mode
+	min_heap test;
+	initialize_heap(test, 2);
+	insert_heap(test, 0, 2);
+	insert_heap(test, 1, 5);
+	insert_heap(test, 2, 3);
+	cout << "测试扩容功能，当前size和capacity分别是：" << test.size << " " << test.capacity << endl;
+	insert_heap(test, 3, 8);
+	insert_heap(test, 4, 9);
+	insert_heap(test, 5, 4);
+	insert_heap(test, 6, 1);
+	cout << "测试扩容功能，当前size和capacity分别是：" << test.size << " " << test.capacity << endl;
+	while (!is_heap_empty(test)) {//只要还没空，就一直取元素，相比直接判断size在忘记extract_min会自动--的时候额外加了一行test.size--且初始size为奇数时不会死循环
+		heap_node min;
+		extract_min(test, min);
+		cout << "本轮取出的堆顶元素序号和距离是：" << min.vertex_id << " " << min.distance << endl;
 	}
+	heap_node empty;
+	cout << "测试空堆弹出是否正常，0是对的：" << extract_min(test, empty) << endl;
+	release_heap(test);
+#endif
+
+#if test_mode
+	edge_node cal;
+	cal.time_cost = 6;
+	cal.fare_cost = 0.5;
+	cout << calculate_weight(cal, 0) << endl << calculate_weight(cal, 8) << endl;
+#endif
+
+	double distance[max_vertices];//Dijkstra数组
+	for (int i = 0; i < vertex_number; i++)
+		distance[i] = INFINITY;
+	distance[0] = 0;
+	for (int i = 0; i < 3; i++)
+		cout << distance[i] << endl;
+
+
+
+	
 
 	return 0;
 }
