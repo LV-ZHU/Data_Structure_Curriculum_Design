@@ -192,8 +192,28 @@ void sift_up(min_heap& heap, int index)
 }
 
 /***************************************************************************
+  函数名称：expand_heap
+  功    能：堆满时扩容至原来容量的两倍
+  输入参数：min_heap& heap：需要扩容的堆
+  返 回 值：false代表扩容失败，true代表成功
+  说    明：Dijkstra中同一顶点可能因为距离更新而多次入堆，所以容量不一定等于顶点数；默认扩为两倍
+***************************************************************************/
+bool expand_heap(min_heap& heap)
+{
+	if (!heap.data || (heap.capacity <= 0))
+		return false;
+	heap_node* bigger_heap = new heap_node[heap.capacity * 2];
+	for (int i = 0; i < heap.size; i++)
+		bigger_heap[i] = heap.data[i];//复制，heap.size不变
+	delete[] heap.data;//释放
+	heap.data = bigger_heap;//data指向新堆
+	heap.capacity *= 2;
+	return true;
+}
+
+/***************************************************************************
   函数名称：insert_heap
-  功    能：在堆中插入某个元素，加入sift_up调用包括重新对最小堆排序
+  功    能：在堆中插入某个元素，加入sift_up调用包括重新对最小堆排序，堆满时会调用expand_heap扩容
   输入参数：min_heap& heap：需要插入的堆
    int vertex_id：插入顶点的编号
    double distance：插入顶点的当前距离
@@ -202,8 +222,12 @@ void sift_up(min_heap& heap, int index)
 ***************************************************************************/
 bool insert_heap(min_heap& heap, int vertex_id, double distance)
 {
-	if (heap.size >= heap.capacity || !heap.data )
+	if (!heap.data )
 		return false;
+	if( heap.size >= heap.capacity) {//其实只能=，所以只需要扩一次容即可，不需要while循环
+		if (!expand_heap(heap))
+			return false;//没return就完成了扩容
+	}
 	(heap.data + heap.size)->vertex_id = vertex_id;//等价于(*(heap.data + heap.size)).vertex_id或是heap.data[heap.size].vertex_id
 	(heap.data + heap.size)->distance = distance;
 	heap.size++;//插入完后实际数量加1
@@ -281,6 +305,8 @@ bool extract_min(min_heap& heap, heap_node& minimum_node)
 	return true;
 }
 
+
+
 /***************************************************************************
   函数名称：release_heap
   功    能：释放整个堆
@@ -295,7 +321,6 @@ void release_heap(min_heap& heap)
 	heap.size = 0;
 	heap.capacity = 0;
 }
-
 
 /***************************************************************************
   函数名称：
@@ -324,22 +349,26 @@ int main()
 		release_edges(vertices[i]);
 
 	if (test_mode){
-		min_heap test_why_need_heapify;
-		initialize_heap(test_why_need_heapify, 8);
-		insert_heap(test_why_need_heapify, 0, 2);
-		insert_heap(test_why_need_heapify, 1, 5);
-		insert_heap(test_why_need_heapify, 2, 3);
-		insert_heap(test_why_need_heapify, 3, 8);
-		insert_heap(test_why_need_heapify, 4, 9);
-		insert_heap(test_why_need_heapify, 5, 4);
-		insert_heap(test_why_need_heapify, 6, 1);
-
-		while (is_heap_empty) {//只要还没空，就一直取元素，相比直接判断size在忘记extract_min会自动--的时候额外加了一行test_why_need_heapify.size--且初始size为奇数时不会死循环
+		min_heap test;
+		initialize_heap(test, 2);
+		insert_heap(test, 0, 2);
+		insert_heap(test, 1, 5);
+		insert_heap(test, 2, 3);
+		cout << "测试扩容功能，当前size和capacity分别是：" << test.size << " " << test.capacity << endl;
+		insert_heap(test, 3, 8);
+		insert_heap(test, 4, 9);
+		insert_heap(test, 5, 4);
+		insert_heap(test, 6, 1);
+		cout << "测试扩容功能，当前size和capacity分别是：" << test.size << " " << test.capacity << endl;
+		
+		while (!is_heap_empty(test)) {//只要还没空，就一直取元素，相比直接判断size在忘记extract_min会自动--的时候额外加了一行test.size--且初始size为奇数时不会死循环
 			heap_node min;
-			extract_min(test_why_need_heapify, min);
+			extract_min(test, min);
 			cout << "本轮取出的堆顶元素序号和距离是：" << min.vertex_id << " " << min.distance << endl;
 		}
-		release_heap(test_why_need_heapify);
+		heap_node empty;
+		cout << "测试空堆弹出是否正常，0是对的：" << extract_min(test, empty);
+		release_heap(test);
 	}
 
 	return 0;
