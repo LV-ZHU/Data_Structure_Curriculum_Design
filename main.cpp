@@ -151,25 +151,6 @@ bool initialize_heap(min_heap& heap,int initial_capacity)
 }
 
 /***************************************************************************
-  函数名称：insert_heap
-  功    能：在堆中插入某个元素（不包括重新堆排序）
-  输入参数：min_heap& heap：需要插入的堆
-   int vertex_id：插入顶点的编号
-   double distance：插入顶点的当前距离
-  返 回 值：false代表插入失败，true代表成功
-  说    明：heap.size >= heap.capacity指没空余容量；!heap.data表明堆当前没有动态数组，通常因为initialize_heap初始化失败
-***************************************************************************/
-bool insert_heap(min_heap& heap, int vertex_id, double distance)
-{
-	if (heap.size >= heap.capacity || !heap.data )
-		return false;
-	(heap.data + heap.size)->vertex_id = vertex_id;//等价于(*(heap.data + heap.size)).vertex_id或是heap.data[heap.size].vertex_id
-	(heap.data + heap.size)->distance = distance;
-	heap.size++;//插入完后实际数量加1
-	return true;
-}
-
-/***************************************************************************
   函数名称：swap_heap_node
   功    能：交换两个堆结点，连带着顶点编号和当前距离两个结构体成员一起交换
   输入参数：heap_node& node1, heap_node& node2：需要交换的两个堆结点，交换后node1、node2所有成员互换
@@ -209,6 +190,28 @@ void sift_up(min_heap& heap, int index)
 			break;//该节点已经到了正确的位置上
 	}
 }
+
+/***************************************************************************
+  函数名称：insert_heap
+  功    能：在堆中插入某个元素，加入sift_up调用包括重新对最小堆排序
+  输入参数：min_heap& heap：需要插入的堆
+   int vertex_id：插入顶点的编号
+   double distance：插入顶点的当前距离
+  返 回 值：false代表插入失败，true代表成功
+  说    明：heap.size >= heap.capacity指没空余容量；!heap.data表明堆当前没有动态数组，通常因为initialize_heap初始化失败
+***************************************************************************/
+bool insert_heap(min_heap& heap, int vertex_id, double distance)
+{
+	if (heap.size >= heap.capacity || !heap.data )
+		return false;
+	(heap.data + heap.size)->vertex_id = vertex_id;//等价于(*(heap.data + heap.size)).vertex_id或是heap.data[heap.size].vertex_id
+	(heap.data + heap.size)->distance = distance;
+	sift_up(heap, heap.size);
+	heap.size++;//插入完后实际数量加1
+	return true;
+}
+
+
 
 /***************************************************************************
   函数名称：release_heap
@@ -259,17 +262,14 @@ int main()
 		insert_heap(test_why_need_heapify, 1, 5);
 		insert_heap(test_why_need_heapify, 2, 3);
 		insert_heap(test_why_need_heapify, 3, 8);
-		insert_heap(test_why_need_heapify, 4, 4);
-		insert_heap(test_why_need_heapify, 5, 9);
+		insert_heap(test_why_need_heapify, 4, 9);
+		insert_heap(test_why_need_heapify, 5, 4);
 		insert_heap(test_why_need_heapify, 6, 1);
 
-		cout << "交换前：";
 		for (int i = 0; i < 7; i++)
 			cout << test_why_need_heapify.data[i].vertex_id << " " << test_why_need_heapify.data[i].distance << endl;
-		sift_up(test_why_need_heapify, 6); 
-		cout << "交换后：";
-		for (int i = 0; i < 7; i++)
-			cout << test_why_need_heapify.data[i].vertex_id << " " << test_why_need_heapify.data[i].distance << endl; 
+		
+	 
 		release_heap(test_why_need_heapify);
 	}
 
