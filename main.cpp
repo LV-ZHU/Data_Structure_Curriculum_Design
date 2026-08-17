@@ -14,7 +14,7 @@ enum class station_type{METRO, BUS};//站点类型:地铁，公交
 struct edge_node {
 	int to = INT_MAX;//目标顶点编号
 	int time_cost = INT_MAX;//这条边记录的耗时
-	double fare_cost = INFINITY;//费用
+	double fare_cost = std::numeric_limits<double>::infinity();//费用
 	edge_type type = edge_type::METRO;//边的类型，默认为地铁
 	edge_node* next = nullptr;//指向同一邻接链表中的下一个边结点
 };
@@ -359,8 +359,7 @@ int main()
 	add_undirected_edge(vertices[0], vertices[2], 6, 0, edge_type::TRANSFER);
 	for (int i = 0; i < vertex_number; i++)
 		output_one_step_vertex(vertices[i]);
-	for (int i = 0; i < vertex_number; i++)
-		release_edges(vertices[i]);
+	
 
 #if test_mode
 	min_heap test;
@@ -393,14 +392,27 @@ int main()
 
 	double distance[max_vertices];//Dijkstra数组
 	for (int i = 0; i < vertex_number; i++)
-		distance[i] = INFINITY;
+		distance[i] = std::numeric_limits<double>::infinity();
 	distance[0] = 0;
 	for (int i = 0; i < 3; i++)
 		cout << distance[i] << endl;
 
+	int previous_vertex[max_vertices];//前驱数组
+	for (int i = 0; i < vertex_number; i++)
+		previous_vertex[i] = -1;
+	for (int i = 0; i < 3; i++)
+		cout << previous_vertex[i] << endl;
+
+	cout << endl << endl;
+	int current_vertex = 0;//当前顶点编号：0
+	edge_node* current_edge = vertices[current_vertex].first_edge;
+	double candidate_distance = distance[current_vertex] + calculate_weight(*current_edge, 0);
+	cout << current_edge->to << " " << candidate_distance << endl;
 
 
-	
+	for (int i = 0; i < vertex_number; i++)
+		release_edges(vertices[i]);
+
 
 	return 0;
 }
