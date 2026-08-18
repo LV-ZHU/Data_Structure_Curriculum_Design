@@ -4,7 +4,7 @@
 #include <limits>
 using namespace std;
 
-#define test_mode 1
+#define test_mode 0
 const int max_vertices = 100; //最多100个顶点
 
 enum class edge_type { METRO, BUS, TRANSFER };//边类型：地铁，公交，换乘
@@ -336,6 +336,29 @@ double calculate_weight(const edge_node& node, double k)
 }
 
 /***************************************************************************
+  函数名称：output_dijkstra_arrays
+  功    能：打印最新最短距离distance数组和previous_vertex前驱数组，仅用cout展现
+  输入参数：const string& prompt：表明这是什么状态下的数组
+   const double distance[]：最短距离数组
+   const int previous_vertex[]：前驱数组，用来记录最短路径
+   int vertex_number：需要输出多少个顶点
+  返 回 值：空
+  说    明：用cout打印数组各个元素，因为只用读所以传参用const，只有调试的时候需要用到这个函数记录变化状态
+***************************************************************************/
+void output_dijkstra_arrays(const string& prompt,const double distance[], const int previous_vertex[], int vertex_number)
+{
+	cout << prompt << endl << "distance: ";
+	for (int i = 0; i < vertex_number; i++)
+		cout << distance[i] << "  ";
+	cout << endl;
+	cout << "previous_vertex: ";
+	for (int i = 0; i < vertex_number; i++)
+		cout << previous_vertex[i] << "  ";
+	cout << endl << endl;
+}
+
+
+/***************************************************************************
   函数名称：
   功    能：
   输入参数：
@@ -357,8 +380,12 @@ int main()
 
 	add_undirected_edge(vertices[0], vertices[1], 3, 0.3, edge_type::METRO);
 	add_undirected_edge(vertices[0], vertices[2], 6, 0, edge_type::TRANSFER);
+
+#if test_mode
 	for (int i = 0; i < vertex_number; i++)
 		output_one_step_vertex(vertices[i]);
+#endif
+	
 	
 
 #if test_mode
@@ -389,25 +416,42 @@ int main()
 	cal.fare_cost = 0.5;
 	cout << calculate_weight(cal, 0) << endl << calculate_weight(cal, 8) << endl;
 #endif
+	
+	
 
+	
+
+
+	
 	double distance[max_vertices];//Dijkstra数组
 	for (int i = 0; i < vertex_number; i++)
 		distance[i] = std::numeric_limits<double>::infinity();
 	distance[0] = 0;
-	for (int i = 0; i < 3; i++)
-		cout << distance[i] << endl;
-
 	int previous_vertex[max_vertices];//前驱数组
 	for (int i = 0; i < vertex_number; i++)
 		previous_vertex[i] = -1;
-	for (int i = 0; i < 3; i++)
-		cout << previous_vertex[i] << endl;
+	output_dijkstra_arrays("初始状态：", distance, previous_vertex, vertex_number);
 
-	cout << endl << endl;
-	int current_vertex = 0;//当前顶点编号：0
+	min_heap heap;
+	initialize_heap(heap, vertex_number);
+	insert_heap(heap, 0, distance[0]);
+	heap_node current_node;
+	extract_min(heap, current_node);
+	int current_vertex = current_node.vertex_id;
+
 	edge_node* current_edge = vertices[current_vertex].first_edge;
-	double candidate_distance = distance[current_vertex] + calculate_weight(*current_edge, 0);
-	cout << current_edge->to << " " << candidate_distance << endl;
+	while (current_edge) {
+		int next_vertex = current_edge->to;
+		double candidate_distance = distance[current_vertex] + calculate_weight(*current_edge, 0);
+		if (candidate_distance < distance[next_vertex]) {
+			distance[next_vertex] = candidate_distance;
+			previous_vertex[next_vertex] = current_vertex;
+		}
+		current_edge = current_edge->next;
+	}
+	
+	//打印更新后信息
+	output_dijkstra_arrays("更新后：", distance, previous_vertex, vertex_number);
 
 
 	for (int i = 0; i < vertex_number; i++)
