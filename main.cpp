@@ -358,6 +358,21 @@ void output_dijkstra_arrays(const string& prompt,const double distance[], const 
 }
 
 /***************************************************************************
+  函数名称：is_valid_vertex_id
+  功    能：检查vertex_id是否在0..vertex_number-1之间
+  输入参数：const int vertex_id：需要检查的顶点下标，const int vertex_number：总顶点数
+  返 回 值：true表示在范围内，false表示不在范围内
+  说    明：很多函数需要检查vertex_id是否在正确的数组下标范围内，可调用该函数
+***************************************************************************/
+bool is_valid_vertex_id(const int vertex_id,const int vertex_number)
+{
+	if (vertex_id >= 0 && vertex_id < vertex_number)
+		return true;//开始下标应该在0..vertex_number-1之间，数组下标
+	else
+		return false;
+}
+
+/***************************************************************************
   函数名称：dijkstra
   功    能：完整的dijkstra流程
   输入参数：vertex vertices[]：顶点数组
@@ -376,7 +391,7 @@ bool dijkstra(vertex vertices[], int vertex_number, int start_vertex, int k, dou
 	//范围检查
 	if (vertex_number <= 0 || vertex_number > max_vertices)
 		return false;//顶点数应该在1..max_vertices之间
-	if (start_vertex < 0 || start_vertex >= vertex_number)
+	if (!is_valid_vertex_id(start_vertex, vertex_number))
 		return false;//开始下标应该在0..vertex_number-1之间
 	if (k < 0)
 		return false;//Dijkstra对负权图无效
@@ -426,16 +441,60 @@ bool dijkstra(vertex vertices[], int vertex_number, int start_vertex, int k, dou
 	return true;
 }
 
+/***************************************************************************
+  函数名称：build_paths
+  功    能：建立paths数组，存储最短路径整个过程经过哪些顶点
+  输入参数：const int previous_vertex[]：前驱数组
+	int vertex_number：总顶点数，用于范围检查和防止异常循环
+	int start_vertex：起点顶点序号；
+	int end_vertex：终点顶点序号；
+	int path[]：输出路径数组；
+	int& path_vertex_number：路径总长度，确定数组边界
+  返 回 值：false表示失败，true表示成功
+  说    明：path[]为反向数组
+***************************************************************************/
+bool build_paths(const int previous_vertex[], int vertex_number, int start_vertex, int end_vertex, int path[], int& path_vertex_number)
+{
+	//范围检查
+	if (vertex_number <= 0 || vertex_number > max_vertices)
+		return false;//顶点数应该在1..max_vertices之间
+	if (!(is_valid_vertex_id(start_vertex, vertex_number) && is_valid_vertex_id(end_vertex, vertex_number)))
+		return false;//起点、终点下标都应该在0..vertex_number-1之间
+	
+	path_vertex_number = 0;//不依赖传入的值，重置为0，因为用的引用所以无法设置函数默认参数
+	int current_vertex = end_vertex;
+	while (path_vertex_number<vertex_number) {//若大于等于vertex_number根据鸽巢原理一定有重复顶点出现，则有环
+		if (!is_valid_vertex_id(current_vertex,vertex_number)) {//不可达，正常情况下这种情况current_vertex为-1
+			path_vertex_number = 0;
+			return false;
+		}
+		path[path_vertex_number] = current_vertex;
+		path_vertex_number++;
+		if (current_vertex == start_vertex) 
+			return true;//找到起点则返回true，注意此处等号左边不能用path[path_vertex_number]，因为path_vertex_number已经自增
+		
+		current_vertex = previous_vertex[current_vertex];//更新current_vertex为它的前驱节点
+		
+	}
+	//不满足path_vertex_number<vertex_number，说明不正常
+	path_vertex_number = 0;
+	return false;
+}
 
 /***************************************************************************
-  函数名称：output_paths
-  功    能：
-  输入参数：
-  返 回 值：
-  说    明：
+  函数名称：output_path
+  功    能：打印路径，目前output命名的先只cout呈现
+  输入参数：const vertex vertices[]：顶点数组
+  const int path[]：输出路径数组
+  const int path_vertex_number：路径总长度
+  返 回 值：无
+  说    明：path[]为反向数组，故反向遍历打印
 ***************************************************************************/
-
-
+void output_path(const vertex vertices[], const int path[], const int path_vertex_number)
+{
+	for (int i = path_vertex_number - 1; i >= 0; i--)
+		cout << vertices[path[i]].name << endl;//现在是逆序数组
+}
 
 /***************************************************************************
   函数名称：
@@ -475,14 +534,16 @@ int main()
 	else
 		cout << "寻路失败" << endl;
 
-	cout << "最短路径逆序为：" << endl;
 	int end_vertex = 2;
-	int current_vertex = end_vertex;
-	while (current_vertex != start_vertex) {
-		cout << current_vertex << " ";
-		current_vertex = previous_vertex[current_vertex];
-	}
-	cout << start_vertex << endl;
+	int path_vertex_number = 0;
+	int path[max_vertices];
+	if (build_paths(previous_vertex, vertex_number, start_vertex, end_vertex, path, path_vertex_number))
+		output_path(vertices,path, path_vertex_number);
+	else
+		cout << "寻路失败" << endl;
+
+	
+	
 
 
 
