@@ -328,6 +328,20 @@ void release_heap(min_heap& heap)
 	heap.size = 0;
 	heap.capacity = 0;
 }
+/***************************************************************************
+  函数名称：get_effective_time_cost
+  功    能：从time_cost和bike_time_cost里选一个合理值
+  输入参数：const edge_node& node：需要判断的边，bool allow_bike：是否允许骑车来代替获得更短的time_cost
+  返 回 值：最终选定的time_cost
+  说    明：如果允许骑车；类型为换乘边；骑车用时合理同时满足time_cost为骑行用时
+***************************************************************************/
+int get_effective_time_cost(const edge_node& node, bool allow_bike = false)
+{
+	if (allow_bike && node.type == edge_type::TRANSFER && node.bike_time_cost >= 0 && node.bike_time_cost < node.time_cost)
+		return node.bike_time_cost;
+	else
+		return node.time_cost;
+}
 
 /***************************************************************************
   函数名称：calculate_weight
@@ -338,10 +352,7 @@ void release_heap(min_heap& heap)
 ***************************************************************************/
 double calculate_weight(const edge_node & node, double k, bool allow_bike = false)
 {
-	int effective_time_cost = node.time_cost;
-	if (allow_bike && node.type == edge_type::TRANSFER && node.bike_time_cost >= 0 && node.bike_time_cost < effective_time_cost)
-		effective_time_cost = node.bike_time_cost;//如果允许骑车；类型为换乘边；骑车用时合理则改time_cost为骑行用时
-	return effective_time_cost + k * node.fare_cost;
+	return get_effective_time_cost(node, allow_bike) + k * node.fare_cost;
 }
 
 /***************************************************************************
@@ -380,6 +391,7 @@ bool is_valid_vertex_id(const int vertex_id,const int vertex_number)
 	else
 		return false;
 }
+
 
 /***************************************************************************
   函数名称：dijkstra
@@ -502,8 +514,10 @@ bool build_paths(const int previous_vertex[], int vertex_number, int start_verte
 ***************************************************************************/
 void output_path(const vertex vertices[], const int path[], const int path_vertex_number)
 {
+	cout << "推荐路线：";
 	for (int i = path_vertex_number - 1; i >= 0; i--)
-		cout << vertices[path[i]].name << endl;//现在是逆序数组
+		cout << vertices[path[i]].name << (i ? "->" : " ");//i为0的时候说明到终点了，输出空，其余时间->连接
+	cout << endl;
 }
 
 /***************************************************************************
