@@ -357,6 +357,67 @@ void output_dijkstra_arrays(const string& prompt,const double distance[], const 
 	cout << endl << endl;
 }
 
+/***************************************************************************
+  函数名称：dijkstra
+  功    能：完整的dijkstra流程
+  输入参数：vertex vertices[]：顶点数组
+   int vertex_number：顶点个数
+   int start_vertex：起点顶点的下标
+   int k：时间+k×费用里的策略参数k
+   double distance[]：完成dijkstra流程时维护的最短路径长数组
+   int previous_vertex[]：完成dijkstra流程时维护的前驱数组顶点，记录路径
+  返 回 值：参数或堆操作失败返回false，成功返回true
+  说    明：distance和previous_vertex是结果数组,为需要修改的核心表格，函数内部会进行修改
+	由于同一套顶点允许多次入堆，不采用visited数组写法bool visited[max_vertices] = {false}，
+    而是判断堆里的distance元素是否已更新为distance结果数组里的最小值
+***************************************************************************/
+bool dijkstra(vertex vertices[], int vertex_number, int start_vertex, int k, double distance[], int previous_vertex[])
+{
+	for (int i = 0; i < vertex_number; i++)
+		distance[i] = std::numeric_limits<double>::infinity();
+	distance[start_vertex] = 0;//从起点到起点距离显然为0，起点到其余为inf
+	for (int i = 0; i < vertex_number; i++)
+		previous_vertex[i] = -1;//初始化为-1，约定-1代表当前还没有前驱节点
+
+#if test_mode
+	output_dijkstra_arrays("初始状态：", distance, previous_vertex, vertex_number);
+#endif
+	
+	min_heap heap;
+	if(!initialize_heap(heap, vertex_number))
+		return false;
+	insert_heap(heap, start_vertex, distance[start_vertex]);
+	while (!is_heap_empty(heap)) {
+		heap_node current_node;
+		extract_min(heap, current_node);
+		int current_vertex = current_node.vertex_id;
+		if (current_node.distance > distance[current_vertex])
+			continue;//如果弹出的堆顶距离比当前记录的距离大，说明这个顶点已经被更新过了，直接跳过，这样每个顶点只会被处理一次，避免重复处理
+
+		edge_node* current_edge = vertices[current_vertex].first_edge;//当前遍历的顶点初始化为邻接表的第一个边结点指针
+		while (current_edge) {//只要当前顶点还有邻接边，就一直遍历
+			int next_vertex = current_edge->to;//当前邻接边的目标顶点编号
+
+			double candidate_distance = distance[current_vertex] + calculate_weight(*current_edge, k);//计算当前顶点到邻接顶点的候选距离
+			if (candidate_distance < distance[next_vertex]) {//如果候选距离比原来的距离小，就更新
+				distance[next_vertex] = candidate_distance;//更新distance数组记录的距离
+				previous_vertex[next_vertex] = current_vertex;//更新前驱数组记录的前驱顶点
+				insert_heap(heap, next_vertex, distance[next_vertex]);//把邻接顶点加入堆中，等待下一轮弹出
+			}
+
+			current_edge = current_edge->next;
+		}
+
+#if test_mode
+		output_dijkstra_arrays("本轮处理后：", distance, previous_vertex, vertex_number);
+#endif
+
+	}
+	release_heap(heap);
+
+	return true;
+}
+
 
 /***************************************************************************
   函数名称：
@@ -417,46 +478,8 @@ int main()
 	cout << calculate_weight(cal, 0) << endl << calculate_weight(cal, 8) << endl;
 #endif
 	
-	
-
-	
-
-
-	
-	double distance[max_vertices];//Dijkstra数组
-	for (int i = 0; i < vertex_number; i++)
-		distance[i] = std::numeric_limits<double>::infinity();
-	distance[0] = 0;
-	int previous_vertex[max_vertices];//前驱数组
-	for (int i = 0; i < vertex_number; i++)
-		previous_vertex[i] = -1;
-	output_dijkstra_arrays("初始状态：", distance, previous_vertex, vertex_number);
-
-	min_heap heap;
-	initialize_heap(heap, vertex_number);
-	insert_heap(heap, 0, distance[0]);
-	heap_node current_node;
-	extract_min(heap, current_node);
-	int current_vertex = current_node.vertex_id;
-
-	edge_node* current_edge = vertices[current_vertex].first_edge;
-	while (current_edge) {
-		int next_vertex = current_edge->to;
-		double candidate_distance = distance[current_vertex] + calculate_weight(*current_edge, 0);
-		if (candidate_distance < distance[next_vertex]) {
-			distance[next_vertex] = candidate_distance;
-			previous_vertex[next_vertex] = current_vertex;
-		}
-		current_edge = current_edge->next;
-	}
-	
-	//打印更新后信息
-	output_dijkstra_arrays("更新后：", distance, previous_vertex, vertex_number);
-
-
 	for (int i = 0; i < vertex_number; i++)
 		release_edges(vertices[i]);
-
 
 	return 0;
 }
