@@ -223,7 +223,7 @@ bool expand_heap(min_heap& heap)
 ***************************************************************************/
 bool insert_heap(min_heap& heap, int vertex_id, double distance)
 {
-	if (!heap.data )
+	if (!heap.data)
 		return false;
 	if( heap.size >= heap.capacity) {//其实只能=，所以只需要扩一次容即可，不需要while循环
 		if (!expand_heap(heap))
@@ -366,35 +366,45 @@ void output_dijkstra_arrays(const string& prompt,const double distance[], const 
    int k：时间+k×费用里的策略参数k
    double distance[]：完成dijkstra流程时维护的最短路径长数组
    int previous_vertex[]：完成dijkstra流程时维护的前驱数组顶点，记录路径
-  返 回 值：参数或堆操作失败返回false，成功返回true
+  返 回 值：参数不在正确范围内或堆操作失败返回false，成功返回true
   说    明：distance和previous_vertex是结果数组,为需要修改的核心表格，函数内部会进行修改
 	由于同一套顶点允许多次入堆，不采用visited数组写法bool visited[max_vertices] = {false}，
     而是判断堆里的distance元素是否已更新为distance结果数组里的最小值
 ***************************************************************************/
 bool dijkstra(vertex vertices[], int vertex_number, int start_vertex, int k, double distance[], int previous_vertex[])
 {
+	//范围检查
+	if (vertex_number <= 0 || vertex_number > max_vertices)
+		return false;//顶点数应该在1..max_vertices之间
+	if (start_vertex < 0 || start_vertex >= vertex_number)
+		return false;//开始下标应该在0..vertex_number-1之间
+	if (k < 0)
+		return false;//Dijkstra对负权图无效
+	//初始化值
 	for (int i = 0; i < vertex_number; i++)
 		distance[i] = std::numeric_limits<double>::infinity();
 	distance[start_vertex] = 0;//从起点到起点距离显然为0，起点到其余为inf
 	for (int i = 0; i < vertex_number; i++)
 		previous_vertex[i] = -1;//初始化为-1，约定-1代表当前还没有前驱节点
-
-#if test_mode
-	output_dijkstra_arrays("初始状态：", distance, previous_vertex, vertex_number);
-#endif
 	
 	min_heap heap;
 	if(!initialize_heap(heap, vertex_number))
 		return false;
-	insert_heap(heap, start_vertex, distance[start_vertex]);
+	if (!insert_heap(heap, start_vertex, distance[start_vertex])) {
+		release_heap(heap);//插入失败，则释放
+		return false;
+	}
 	while (!is_heap_empty(heap)) {
 		heap_node current_node;
-		extract_min(heap, current_node);
+		if (!extract_min(heap, current_node)) {
+			release_heap(heap);//拿出堆顶最小元素失败，则释放
+			return false;
+		}
 		int current_vertex = current_node.vertex_id;
 		if (current_node.distance > distance[current_vertex])
-			continue;//如果弹出的堆顶距离比当前记录的距离大，说明这个顶点已经被更新过了，直接跳过，这样每个顶点只会被处理一次，避免重复处理
+			continue;//如果弹出的堆顶距离比当前记录的距离大，说明这个顶点已经被更新过了，直接跳过旧堆，避免重复处理
 
-		edge_node* current_edge = vertices[current_vertex].first_edge;//当前遍历的顶点初始化为邻接表的第一个边结点指针
+		edge_node* current_edge = vertices[current_vertex].first_edge;//当前边指针指向当前顶点邻接表的第一条边
 		while (current_edge) {//只要当前顶点还有邻接边，就一直遍历
 			int next_vertex = current_edge->to;//当前邻接边的目标顶点编号
 
@@ -402,21 +412,29 @@ bool dijkstra(vertex vertices[], int vertex_number, int start_vertex, int k, dou
 			if (candidate_distance < distance[next_vertex]) {//如果候选距离比原来的距离小，就更新
 				distance[next_vertex] = candidate_distance;//更新distance数组记录的距离
 				previous_vertex[next_vertex] = current_vertex;//更新前驱数组记录的前驱顶点
-				insert_heap(heap, next_vertex, distance[next_vertex]);//把邻接顶点加入堆中，等待下一轮弹出
+				if (!insert_heap(heap, next_vertex, distance[next_vertex])){//把邻接顶点加入堆中，等待下一轮弹出
+					release_heap(heap);//插入失败，则释放
+					return false;
+				}	
 			}
 
 			current_edge = current_edge->next;
 		}
-
-#if test_mode
-		output_dijkstra_arrays("本轮处理后：", distance, previous_vertex, vertex_number);
-#endif
-
 	}
 	release_heap(heap);
 
 	return true;
 }
+
+
+/***************************************************************************
+  函数名称：output_paths
+  功    能：
+  输入参数：
+  返 回 值：
+  说    明：
+***************************************************************************/
+
 
 
 /***************************************************************************
@@ -446,8 +464,29 @@ int main()
 	for (int i = 0; i < vertex_number; i++)
 		output_one_step_vertex(vertices[i]);
 #endif
-	
-	
+
+	int start_vertex = 0;
+	int k = 0;
+	double distance[max_vertices];
+	int previous_vertex[max_vertices];
+
+	if (dijkstra(vertices, vertex_number, start_vertex, k, distance, previous_vertex))
+		output_dijkstra_arrays("最终寻路结果：", distance, previous_vertex, vertex_number);
+	else
+		cout << "寻路失败" << endl;
+
+	cout << "最短路径逆序为：" << endl;
+	int end_vertex = 2;
+	int current_vertex = end_vertex;
+	while (current_vertex != start_vertex) {
+		cout << current_vertex << " ";
+		current_vertex = previous_vertex[current_vertex];
+	}
+	cout << start_vertex << endl;
+
+
+
+
 
 #if test_mode
 	min_heap test;
