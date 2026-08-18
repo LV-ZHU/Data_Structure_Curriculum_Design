@@ -16,7 +16,9 @@ struct edge_node {
 	int time_cost = INT_MAX;//这条边记录的耗时
 	double fare_cost = std::numeric_limits<double>::infinity();//费用
 	edge_type type = edge_type::METRO;//边的类型，默认为地铁
+	int bike_time_cost = -1;//地铁和公交默认-1，换乘情况若可骑行则改为对应骑行时间
 	edge_node* next = nullptr;//指向同一邻接链表中的下一个边结点
+	
 };
 //顶点结构体，V
 struct vertex {
@@ -44,11 +46,12 @@ struct min_heap {
 	int to：目标顶点编号，
 	int time_cost：耗时，
 	double fare_cost：费用，
-	edge_type type：边类型
+	edge_type type：边类型，
+	int bike_time_cost：仅存在骑行且type为transfer时才赋值，其余时候默认-1
   返 回 值：空
   说    明：修改来源顶点的 first_edge，把新边插入邻接链表
 ***************************************************************************/
-void add_directed_edge(vertex& from_vertex, int to, int time_cost, double fare_cost, edge_type type) 
+void add_directed_edge(vertex& from_vertex, int to, int time_cost, double fare_cost, edge_type type, int bike_time_cost = -1)
 {
 	edge_node* new_edge = new edge_node;
 	new_edge->to = to;
@@ -56,20 +59,23 @@ void add_directed_edge(vertex& from_vertex, int to, int time_cost, double fare_c
 	new_edge->fare_cost = fare_cost;
 	new_edge->type = type;
 	new_edge->next = from_vertex.first_edge;
+	if (new_edge->type == edge_type::TRANSFER)
+		new_edge->bike_time_cost = bike_time_cost;
 	from_vertex.first_edge = new_edge;
+	
 }
 
 /***************************************************************************
   函数名称：add_undirected_edge
   功    能：调用两次add_directed_edge完成两个方向
-  输入参数：vertex& first_vertex, vertex& second_vertex：两个顶点，其余三个参数两边共享，含义同add_directed_edge函数
+  输入参数：vertex& first_vertex, vertex& second_vertex：两个顶点，其余四个参数两边共享，含义同add_directed_edge函数
   返 回 值：空
   说    明：添加无向边
 ***************************************************************************/
-void add_undirected_edge(vertex& first_vertex, vertex& second_vertex, int time_cost, double fare_cost, edge_type type)
+void add_undirected_edge(vertex& first_vertex, vertex& second_vertex, int time_cost, double fare_cost, edge_type type, int bike_time_cost = -1)
 {
-	add_directed_edge(first_vertex, second_vertex.id, time_cost, fare_cost, type);
-	add_directed_edge(second_vertex, first_vertex.id, time_cost, fare_cost, type);
+	add_directed_edge(first_vertex, second_vertex.id, time_cost, fare_cost, type, bike_time_cost);
+	add_directed_edge(second_vertex, first_vertex.id, time_cost, fare_cost, type, bike_time_cost);
 }
 
 /***************************************************************************
@@ -326,13 +332,16 @@ void release_heap(min_heap& heap)
 /***************************************************************************
   函数名称：calculate_weight
   功    能：按照W=time_cost+k×fare_cost计算权重
-  输入参数：const edge_node& node：需要计算权重的边，double k：预设的倾向于费用还是倾向于时间的比例
+  输入参数：const edge_node& node：需要计算权重的边，double k：预设的倾向于费用还是倾向于时间的比例，bool allow_bike：是否允许骑车来代替获得更短的time_cost
   返 回 值：算式的结果
   说    明：由于不用修改node且为结构体，所以用常量引用
 ***************************************************************************/
-double calculate_weight(const edge_node& node, double k) 
+double calculate_weight(const edge_node & node, double k, bool allow_bike = false)
 {
-	return node.time_cost + k * node.fare_cost;
+	int effective_time_cost = node.time_cost;
+	if (allow_bike && node.type == edge_type::TRANSFER && node.bike_time_cost >= 0 && node.bike_time_cost < effective_time_cost)
+		effective_time_cost = node.bike_time_cost;//如果允许骑车；类型为换乘边；骑车用时合理则改time_cost为骑行用时
+	return effective_time_cost + k * node.fare_cost;
 }
 
 /***************************************************************************
@@ -381,12 +390,13 @@ bool is_valid_vertex_id(const int vertex_id,const int vertex_number)
    int k：时间+k×费用里的策略参数k
    double distance[]：完成dijkstra流程时维护的最短路径长数组
    int previous_vertex[]：完成dijkstra流程时维护的前驱数组顶点，记录路径
+   bool allow_bike = false：是否允许骑车，默认不允许
   返 回 值：参数不在正确范围内或堆操作失败返回false，成功返回true
   说    明：distance和previous_vertex是结果数组,为需要修改的核心表格，函数内部会进行修改
 	由于同一套顶点允许多次入堆，不采用visited数组写法bool visited[max_vertices] = {false}，
     而是判断堆里的distance元素是否已更新为distance结果数组里的最小值
 ***************************************************************************/
-bool dijkstra(vertex vertices[], int vertex_number, int start_vertex, int k, double distance[], int previous_vertex[])
+bool dijkstra(vertex vertices[], int vertex_number, int start_vertex, int k, double distance[], int previous_vertex[], bool allow_bike = false)
 {
 	//范围检查
 	if (vertex_number <= 0 || vertex_number > max_vertices)
@@ -423,7 +433,7 @@ bool dijkstra(vertex vertices[], int vertex_number, int start_vertex, int k, dou
 		while (current_edge) {//只要当前顶点还有邻接边，就一直遍历
 			int next_vertex = current_edge->to;//当前邻接边的目标顶点编号
 
-			double candidate_distance = distance[current_vertex] + calculate_weight(*current_edge, k);//计算当前顶点到邻接顶点的候选距离
+			double candidate_distance = distance[current_vertex] + calculate_weight(*current_edge, k, allow_bike);//计算当前顶点到邻接顶点的候选距离
 			if (candidate_distance < distance[next_vertex]) {//如果候选距离比原来的距离小，就更新
 				distance[next_vertex] = candidate_distance;//更新distance数组记录的距离
 				previous_vertex[next_vertex] = current_vertex;//更新前驱数组记录的前驱顶点
@@ -517,7 +527,7 @@ int main()
 #endif
 
 	add_undirected_edge(vertices[0], vertices[1], 3, 0.3, edge_type::METRO);
-	add_undirected_edge(vertices[0], vertices[2], 6, 0, edge_type::TRANSFER);
+	add_undirected_edge(vertices[0], vertices[2], 6, 0, edge_type::TRANSFER, 2);
 
 #if test_mode
 	for (int i = 0; i < vertex_number; i++)
@@ -529,7 +539,8 @@ int main()
 	double distance[max_vertices];
 	int previous_vertex[max_vertices];
 
-	if (dijkstra(vertices, vertex_number, start_vertex, k, distance, previous_vertex))
+	bool allow_bike = false;
+	if (dijkstra(vertices, vertex_number, start_vertex, k, distance, previous_vertex, allow_bike))
 		output_dijkstra_arrays("最终寻路结果：", distance, previous_vertex, vertex_number);
 	else
 		cout << "寻路失败" << endl;
@@ -539,6 +550,12 @@ int main()
 	int path[max_vertices];
 	if (build_paths(previous_vertex, vertex_number, start_vertex, end_vertex, path, path_vertex_number))
 		output_path(vertices,path, path_vertex_number);
+	else
+		cout << "寻路失败" << endl;
+
+	allow_bike = !allow_bike;
+	if (dijkstra(vertices, vertex_number, start_vertex, k, distance, previous_vertex, allow_bike))
+		output_dijkstra_arrays("最终寻路结果：", distance, previous_vertex, vertex_number);
 	else
 		cout << "寻路失败" << endl;
 
