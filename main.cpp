@@ -18,7 +18,6 @@ struct edge_node {
 	edge_type type = edge_type::METRO;//边的类型，默认为地铁
 	int bike_time_cost = -1;//地铁和公交默认-1，换乘情况若可骑行则改为对应骑行时间
 	edge_node* next = nullptr;//指向同一邻接链表中的下一个边结点
-	
 };
 //顶点结构体，V
 struct vertex {
@@ -504,32 +503,15 @@ bool build_paths(const int previous_vertex[], int vertex_number, int start_verte
 }
 
 /***************************************************************************
-  函数名称：output_path
-  功    能：打印路径，目前output命名的先只cout呈现
-  输入参数：const vertex vertices[]：顶点数组
-  const int path[]：输出路径数组
-  const int path_vertex_number：路径总长度
-  返 回 值：无
-  说    明：path[]为反向数组，故反向遍历打印
-***************************************************************************/
-void output_path(const vertex vertices[], const int path[], const int path_vertex_number)
-{
-	cout << "推荐路线：";
-	for (int i = path_vertex_number - 1; i >= 0; i--)
-		cout << vertices[path[i]].name << (i ? " -> " : "");//i为0的时候说明到终点了，不输出分隔符，其余时间->连接
-	cout << endl;
-}
-
-/***************************************************************************
   函数名称：find_directed_edge
   功    能：找有向边
   输入参数：const vertex & from_vertex：起点顶点，int to：目标顶点编号
   返 回 值：const edge_node*，返回找到的边
   说    明：打印时需要具体路径
 ***************************************************************************/
-const edge_node* find_directed_edge(const vertex & from_vertex, int to)
+const edge_node* find_directed_edge(const vertex& from_vertex, int to)
 {
-	const edge_node *current_edge = from_vertex.first_edge;
+	const edge_node* current_edge = from_vertex.first_edge;
 	while (current_edge) {
 		if (current_edge->to == to)
 			return current_edge;
@@ -537,6 +519,63 @@ const edge_node* find_directed_edge(const vertex & from_vertex, int to)
 	}
 	return nullptr;//遍历后没找到这条边
 }
+
+/***************************************************************************
+  函数名称：output_route_guide
+  功    能：打印路径，目前output命名的先只cout呈现
+  输入参数：const vertex vertices[]：顶点数组
+  const int path[]：输出路径数组
+  const int path_vertex_number：路径总长度
+  bool allow_bike：允许骑行
+  返 回 值：找不到过程边返回false，路线正确返回true
+  说    明：path[]为反向数组，故反向遍历打印
+***************************************************************************/
+bool output_route_guide(const vertex vertices[], const int path[], const int path_vertex_number, bool allow_bike)
+{
+	cout << "推荐路线：";
+	for (int i = path_vertex_number - 1; i >= 0; i--)
+		cout << vertices[path[i]].name << (i ? " -> " : "");//i为0的时候说明到终点了，不输出分隔符，其余时间->连接
+	cout << endl;
+
+	cout << "详细路线：" << endl;
+	int segment_number = 1;
+	while (segment_number < path_vertex_number) {
+		int start_position = path_vertex_number - segment_number;
+		int from_vertex_id = path[start_position];//起点顶点编号
+		int end_position = start_position - 1;
+		int to_vertex_id = path[end_position];//终点顶点编号
+		const edge_node* current_edge = find_directed_edge(vertices[from_vertex_id], to_vertex_id);
+		if (!current_edge) {
+			cout << "路线数据错误" << endl;
+			return false;
+		}
+		int time_cost = get_effective_time_cost(*current_edge, allow_bike);
+		double fare_cost = current_edge->fare_cost;//注意fare_cost类型为double
+		string type_way_in_chinese = "";
+		switch (current_edge->type)
+		{
+			case edge_type::METRO:
+				type_way_in_chinese = "乘坐地铁";
+				break;
+			case edge_type::BUS:
+				type_way_in_chinese = "乘坐公交";
+				break;
+			case edge_type::TRANSFER:
+				if (time_cost < current_edge->time_cost)
+					type_way_in_chinese = "骑行";
+				else //正常情况下此处time_cost == current_edge->time_cost
+					type_way_in_chinese = "步行";
+				break;
+		}
+
+		cout << "第" << segment_number << "段：从" << vertices[from_vertex_id].name << type_way_in_chinese << "前往"
+			<< vertices[to_vertex_id].name << "，耗时" << time_cost << "分钟，费用" << fare_cost << "元。" << endl;
+		segment_number++;
+	}
+	return true;
+}
+
+
 
 /***************************************************************************
   函数名称：calculate_path_statistics
@@ -603,7 +642,7 @@ int main()
 
 	int total_time_cost = 0;
 	bool allow_bike = false;
-	int end_vertex = 2;
+	int end_vertex = 1;
 	int path_vertex_number = 0;
 	int path[max_vertices];
 
@@ -611,9 +650,14 @@ int main()
 	if (dijkstra(vertices, vertex_number, start_vertex, k, distance, previous_vertex, allow_bike)) {
 		if (build_paths(previous_vertex, vertex_number, start_vertex, end_vertex, path, path_vertex_number)) {
 			if (calculate_path_statistics(vertices, path, path_vertex_number, total_time_cost, total_fare_cost, allow_bike)) {
-				output_path(vertices, path, path_vertex_number);
+				int intermediate_station_number = 0;
+				if (path_vertex_number > 2)
+					intermediate_station_number = path_vertex_number - 2;
+				cout << "经停站数：" << intermediate_station_number << "站" << endl;
+				output_route_guide(vertices, path, path_vertex_number,allow_bike);
 				output_dijkstra_arrays("最终寻路结果：", distance, previous_vertex, vertex_number);
-				cout << total_time_cost << " " << total_fare_cost << endl;
+				cout << "总时间为：" << total_time_cost << "分钟" << endl
+					<< "总费用为：" << total_fare_cost << "元" << endl;
 			}
 			else
 				cout << "寻路失败" << endl;
@@ -624,22 +668,7 @@ int main()
 	else
 		cout << "寻路失败" << endl;
 
-	allow_bike = !allow_bike;//变为允许骑行
-	if (dijkstra(vertices, vertex_number, start_vertex, k, distance, previous_vertex, allow_bike)) {
-		if (build_paths(previous_vertex, vertex_number, start_vertex, end_vertex, path, path_vertex_number)) {
-			if (calculate_path_statistics(vertices, path, path_vertex_number, total_time_cost, total_fare_cost, allow_bike)) {
-				output_path(vertices, path, path_vertex_number);
-				output_dijkstra_arrays("最终寻路结果：", distance, previous_vertex, vertex_number);
-				cout << total_time_cost << " " << total_fare_cost << endl;
-			}
-			else
-				cout << "寻路失败" << endl;
-		}
-		else
-			cout << "寻路失败" << endl;
-	}
-	else
-		cout << "寻路失败" << endl;
+	
 		
 
 
