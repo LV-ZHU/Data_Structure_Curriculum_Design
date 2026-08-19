@@ -516,8 +516,56 @@ void output_path(const vertex vertices[], const int path[], const int path_verte
 {
 	cout << "推荐路线：";
 	for (int i = path_vertex_number - 1; i >= 0; i--)
-		cout << vertices[path[i]].name << (i ? "->" : " ");//i为0的时候说明到终点了，输出空，其余时间->连接
+		cout << vertices[path[i]].name << (i ? " -> " : "");//i为0的时候说明到终点了，不输出分隔符，其余时间->连接
 	cout << endl;
+}
+
+/***************************************************************************
+  函数名称：find_directed_edge
+  功    能：找有向边
+  输入参数：const vertex & from_vertex：起点顶点，int to：目标顶点编号
+  返 回 值：const edge_node*，返回找到的边
+  说    明：打印时需要具体路径
+***************************************************************************/
+const edge_node* find_directed_edge(const vertex & from_vertex, int to)
+{
+	const edge_node *current_edge = from_vertex.first_edge;
+	while (current_edge) {
+		if (current_edge->to == to)
+			return current_edge;
+		current_edge = current_edge->next;
+	}
+	return nullptr;//遍历后没找到这条边
+}
+
+/***************************************************************************
+  函数名称：calculate_path_statistics
+  功    能：统计路径总时间、总费用，结果分别存放在引用变量int& total_time_cost和double& total_fare_cost中
+  输入参数：const vertex vertices[]：顶点数组
+  const int path[]：路径倒序数组
+  int path_vertex_number：路径数量
+  int& total_time_cost：存放结果的总耗时
+  double& total_fare_cost：存放结果的总费用
+  bool allow_bike = false：是否允许骑行，默认false
+  返 回 值：成功为true，找不到路径中的边则为false
+  说    明：find_directed_edge返回边指针；调用get_effective_time_cost函数时需要解引用该指针
+***************************************************************************/
+bool calculate_path_statistics(const vertex vertices[], const int path[],
+	int path_vertex_number, int& total_time_cost, double& total_fare_cost, bool allow_bike = false)
+{
+	total_time_cost = 0;
+	total_fare_cost = 0;
+	for (int i = path_vertex_number - 1; i > 0; i--) {
+		const edge_node* current_edge = find_directed_edge(vertices[path[i]], path[i - 1]);
+		if (current_edge) {
+			total_time_cost += get_effective_time_cost(*current_edge, allow_bike);
+			total_fare_cost += current_edge->fare_cost;
+		}
+		else
+			return false;
+	}
+
+	return true;
 }
 
 /***************************************************************************
@@ -553,31 +601,46 @@ int main()
 	double distance[max_vertices];
 	int previous_vertex[max_vertices];
 
+	int total_time_cost = 0;
 	bool allow_bike = false;
-	if (dijkstra(vertices, vertex_number, start_vertex, k, distance, previous_vertex, allow_bike))
-		output_dijkstra_arrays("最终寻路结果：", distance, previous_vertex, vertex_number);
-	else
-		cout << "寻路失败" << endl;
-
 	int end_vertex = 2;
 	int path_vertex_number = 0;
 	int path[max_vertices];
-	if (build_paths(previous_vertex, vertex_number, start_vertex, end_vertex, path, path_vertex_number))
-		output_path(vertices,path, path_vertex_number);
+
+	double total_fare_cost = 0;
+	if (dijkstra(vertices, vertex_number, start_vertex, k, distance, previous_vertex, allow_bike)) {
+		if (build_paths(previous_vertex, vertex_number, start_vertex, end_vertex, path, path_vertex_number)) {
+			if (calculate_path_statistics(vertices, path, path_vertex_number, total_time_cost, total_fare_cost, allow_bike)) {
+				output_path(vertices, path, path_vertex_number);
+				output_dijkstra_arrays("最终寻路结果：", distance, previous_vertex, vertex_number);
+				cout << total_time_cost << " " << total_fare_cost << endl;
+			}
+			else
+				cout << "寻路失败" << endl;
+		}
+		else
+			cout << "寻路失败" << endl;	
+	}
 	else
 		cout << "寻路失败" << endl;
 
-	allow_bike = !allow_bike;
-	if (dijkstra(vertices, vertex_number, start_vertex, k, distance, previous_vertex, allow_bike))
-		output_dijkstra_arrays("最终寻路结果：", distance, previous_vertex, vertex_number);
+	allow_bike = !allow_bike;//变为允许骑行
+	if (dijkstra(vertices, vertex_number, start_vertex, k, distance, previous_vertex, allow_bike)) {
+		if (build_paths(previous_vertex, vertex_number, start_vertex, end_vertex, path, path_vertex_number)) {
+			if (calculate_path_statistics(vertices, path, path_vertex_number, total_time_cost, total_fare_cost, allow_bike)) {
+				output_path(vertices, path, path_vertex_number);
+				output_dijkstra_arrays("最终寻路结果：", distance, previous_vertex, vertex_number);
+				cout << total_time_cost << " " << total_fare_cost << endl;
+			}
+			else
+				cout << "寻路失败" << endl;
+		}
+		else
+			cout << "寻路失败" << endl;
+	}
 	else
 		cout << "寻路失败" << endl;
-
-	
-	
-
-
-
+		
 
 
 #if test_mode
