@@ -2,6 +2,7 @@
 #include <string>
 #include <climits>
 #include <limits>
+#include <iomanip>
 using namespace std;
 
 #define test_mode 0
@@ -16,6 +17,7 @@ struct edge_node {
 	int time_cost = INT_MAX;//这条边记录的耗时
 	double fare_cost = std::numeric_limits<double>::infinity();//费用
 	edge_type type = edge_type::METRO;//边的类型，默认为地铁
+	int line_id = -1; //步行(骑行)默认-1，由于有多条地铁和公交，该字段联合type可确定具体是哪一条线路
 	int bike_time_cost = -1;//地铁和公交默认-1，换乘情况若可骑行则改为对应骑行时间
 	edge_node* next = nullptr;//指向同一邻接链表中的下一个边结点
 };
@@ -46,11 +48,12 @@ struct min_heap {
 	int time_cost：耗时，
 	double fare_cost：费用，
 	edge_type type：边类型，
+	int line_id：仅公交/地铁时代表线路号，骑行默认-1
 	int bike_time_cost：仅存在骑行且type为transfer时才赋值，其余时候默认-1
   返 回 值：空
   说    明：修改来源顶点的 first_edge，把新边插入邻接链表
 ***************************************************************************/
-void add_directed_edge(vertex& from_vertex, int to, int time_cost, double fare_cost, edge_type type, int bike_time_cost = -1)
+void add_directed_edge(vertex& from_vertex, int to, int time_cost, double fare_cost, edge_type type, int line_id = -1,int bike_time_cost = -1)
 {
 	edge_node* new_edge = new edge_node;
 	new_edge->to = to;
@@ -58,8 +61,12 @@ void add_directed_edge(vertex& from_vertex, int to, int time_cost, double fare_c
 	new_edge->fare_cost = fare_cost;
 	new_edge->type = type;
 	new_edge->next = from_vertex.first_edge;
-	if (new_edge->type == edge_type::TRANSFER)
+	if (new_edge->type == edge_type::METRO || new_edge->type == edge_type::BUS)
+		new_edge->line_id = line_id;
+	else if (new_edge->line_id == -1 && new_edge->type == edge_type::TRANSFER)
 		new_edge->bike_time_cost = bike_time_cost;
+	else
+		;
 	from_vertex.first_edge = new_edge;
 	
 }
@@ -67,11 +74,11 @@ void add_directed_edge(vertex& from_vertex, int to, int time_cost, double fare_c
 /***************************************************************************
   函数名称：add_undirected_edge
   功    能：调用两次add_directed_edge完成两个方向
-  输入参数：vertex& first_vertex, vertex& second_vertex：两个顶点，其余四个参数两边共享，含义同add_directed_edge函数
+  输入参数：vertex& first_vertex, vertex& second_vertex：两个顶点，其余五个参数两边共享，含义同add_directed_edge函数
   返 回 值：空
   说    明：添加无向边
 ***************************************************************************/
-void add_undirected_edge(vertex& first_vertex, vertex& second_vertex, int time_cost, double fare_cost, edge_type type, int bike_time_cost = -1)
+void add_undirected_edge(vertex& first_vertex, vertex& second_vertex, int time_cost, double fare_cost, edge_type type, int line_id = -1,int bike_time_cost = -1)
 {
 	add_directed_edge(first_vertex, second_vertex.id, time_cost, fare_cost, type, bike_time_cost);
 	add_directed_edge(second_vertex, first_vertex.id, time_cost, fare_cost, type, bike_time_cost);
@@ -608,6 +615,31 @@ bool calculate_path_statistics(const vertex vertices[], const int path[],
 }
 
 /***************************************************************************
+  函数名称：calculate_arrival_time
+  功    能：根据开始时间和路程时间计算到达时间
+  输入参数：int start_hour：出发小时（0-23）
+	int start_minute：出发分钟（0-59）
+	int total_minutes：路线总分钟数（>=0）
+	int& arrival_hour：到达小时
+	int& arrival_minute：到达分钟
+	int& days_passed：跨过的天数
+  返 回 值：参数符合范围为true，不符合范围则为false
+  说    明：后三个参数为输出参数，故使用引用
+***************************************************************************/
+bool calculate_arrival_time(int start_hour, int start_minute, int total_minutes, 
+	int& arrival_hour,int& arrival_minute, int& days_passed)
+{
+	if (start_hour < 0 || start_hour>23 || start_minute < 0 || start_minute>59 || total_minutes < 0)
+		return false;
+	int total_arrival_minutes = start_hour * 60 + start_minute + total_minutes;
+	days_passed = total_arrival_minutes / 1440;
+	int remain_minutes_in_one_day = total_arrival_minutes % 1440;
+	arrival_hour = remain_minutes_in_one_day / 60;
+	arrival_minute= remain_minutes_in_one_day % 60;
+	return true;
+}
+
+/***************************************************************************
   函数名称：
   功    能：
   输入参数：
@@ -622,13 +654,13 @@ int main()
 	add_vertex(vertices, vertex_number, "Tongji University", station_type::METRO);
 	add_vertex(vertices, vertex_number, "Siping Road", station_type::METRO);
 	add_vertex(vertices, vertex_number, "Guokang Road Siping Road", station_type::BUS);
-
 #if test_mode
 	cout << vertex_number << endl;
 #endif
 
-	add_undirected_edge(vertices[0], vertices[1], 3, 0.3, edge_type::METRO);
-	add_undirected_edge(vertices[0], vertices[2], 6, 0, edge_type::TRANSFER, 2);
+	add_undirected_edge(vertices[0], vertices[1], 3, 0.3, edge_type::METRO, 0);
+	add_undirected_edge(vertices[0], vertices[2], 6, 0, edge_type::TRANSFER, -1, 2);
+	add_undirected_edge(vertices[1], vertices[2], 2, 0, edge_type::TRANSFER, -1, -1);
 
 #if test_mode
 	for (int i = 0; i < vertex_number; i++)
@@ -636,17 +668,24 @@ int main()
 #endif
 
 	int start_vertex = 0;
-	int k = 0;
+	int k = 8;
 	double distance[max_vertices];
 	int previous_vertex[max_vertices];
 
 	int total_time_cost = 0;
 	bool allow_bike = false;
-	int end_vertex = 1;
+	int end_vertex = 2;
 	int path_vertex_number = 0;
 	int path[max_vertices];
 
+	int start_hour = 8;
+	int start_minute = 30;
+	int arrival_hour = 0;
+	int arrival_minute = 0;
+	int days_passed = 0;
+
 	double total_fare_cost = 0;
+
 	if (dijkstra(vertices, vertex_number, start_vertex, k, distance, previous_vertex, allow_bike)) {
 		if (build_paths(previous_vertex, vertex_number, start_vertex, end_vertex, path, path_vertex_number)) {
 			if (calculate_path_statistics(vertices, path, path_vertex_number, total_time_cost, total_fare_cost, allow_bike)) {
@@ -655,18 +694,40 @@ int main()
 					intermediate_station_number = path_vertex_number - 2;
 				cout << "经停站数：" << intermediate_station_number << "站" << endl;
 				output_route_guide(vertices, path, path_vertex_number,allow_bike);
+#if test_mode
 				output_dijkstra_arrays("最终寻路结果：", distance, previous_vertex, vertex_number);
+#endif 
 				cout << "总时间为：" << total_time_cost << "分钟" << endl
 					<< "总费用为：" << total_fare_cost << "元" << endl;
+				if (calculate_arrival_time(start_hour, start_minute, total_time_cost, arrival_hour, arrival_minute, days_passed)) {
+					cout << "出发时间：" << setw(2) << setfill('0') << start_hour << ":" <<
+						setw(2) << start_minute << endl << "预计到达：";//HH:MM格式，右对齐两字符并填充0
+					switch (days_passed) {
+						case 0://绝大多数情况：同一天到达
+							break;
+						case 1:
+							cout << "次日 ";
+							break;
+						default://至少T+2，输出N天后
+							cout << days_passed << "天后 ";
+							break;
+					}
+					cout << setw(2) << arrival_hour << ":" << setw(2) << arrival_minute << setfill(' ') << endl;//setfill默认持续生效
+				}	
+				else
+					cout << "出发时间不合法" << endl;
 			}
 			else
-				cout << "寻路失败" << endl;
+				cout << "路线数据不完整，无法生成统计" << endl;
 		}
 		else
-			cout << "寻路失败" << endl;	
+			cout << "起点与终点之间无可用路线" << endl;	
 	}
 	else
-		cout << "寻路失败" << endl;
+		cout << "寻路计算失败，请检查输入参数" << endl;
+	
+
+	
 
 	
 		
