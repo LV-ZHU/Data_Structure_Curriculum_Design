@@ -7,6 +7,7 @@ using namespace std;
 
 #define test_mode 0
 const int max_vertices = 100; //最多100个顶点
+const int max_lines = 50;//站点最多50个
 
 enum class edge_type { METRO, BUS, TRANSFER };//边类型：地铁，公交，换乘
 enum class station_type{METRO, BUS};//站点类型:地铁，公交
@@ -39,6 +40,36 @@ struct min_heap {
 	int size = 0;//当前实际存有的堆元素数量，用来控制下标小于size防止读取时越界
 	int capacity = 0;//当前数组最多能容纳多少个元素，应该始终满足0≤size≤capacity
 };
+//线路表
+struct transit_line {
+	int id = -1;//线路编号，等于线路在数组里的下标
+	string name = "";//线路中文名称
+	edge_type type= edge_type::METRO;//线路类型，默认为地铁，只允许是地铁/公交类型不允许为换乘
+};
+
+/***************************************************************************
+  函数名称：add_transit_line
+  功    能：添加一条线路
+  输入参数：transit_line lines[]：线路数组
+  int& line_number：当前线路数量
+  string line_name：加入的线路名称
+  edge_type line_type：加入的线路类型（公交/地铁）
+  返 回 值：true代表加入成功，false代表加入失败
+  说    明：当前线路数量需要自增，所以传递引用形式
+***************************************************************************/
+bool add_transit_line(transit_line lines[], int& line_number, string line_name, edge_type line_type)
+{
+	if (line_number >= max_lines)
+		return false;
+	if (line_type != edge_type::METRO && line_type != edge_type::BUS)
+		return false;
+	lines[line_number].id = line_number;//添加前lines里有0..line_number-1线路，现在在line_number位置添加变为0..line_number
+	lines[line_number].name = line_name;
+	lines[line_number].type = line_type;
+	line_number++;
+	return true;
+}
+
 
 /***************************************************************************
   函数名称：add_directed_edge
@@ -48,7 +79,7 @@ struct min_heap {
 	int time_cost：耗时，
 	double fare_cost：费用，
 	edge_type type：边类型，
-	int line_id：仅公交/地铁时代表线路号，骑行默认-1
+	int line_id：仅公交/地铁时代表线路号，换乘边默认-1
 	int bike_time_cost：仅存在骑行且type为transfer时才赋值，其余时候默认-1
   返 回 值：空
   说    明：修改来源顶点的 first_edge，把新边插入邻接链表
@@ -63,10 +94,8 @@ void add_directed_edge(vertex& from_vertex, int to, int time_cost, double fare_c
 	new_edge->next = from_vertex.first_edge;
 	if (new_edge->type == edge_type::METRO || new_edge->type == edge_type::BUS)
 		new_edge->line_id = line_id;
-	else if (new_edge->line_id == -1 && new_edge->type == edge_type::TRANSFER)
+	else if (new_edge->type == edge_type::TRANSFER)
 		new_edge->bike_time_cost = bike_time_cost;
-	else
-		;
 	from_vertex.first_edge = new_edge;
 	
 }
@@ -80,8 +109,8 @@ void add_directed_edge(vertex& from_vertex, int to, int time_cost, double fare_c
 ***************************************************************************/
 void add_undirected_edge(vertex& first_vertex, vertex& second_vertex, int time_cost, double fare_cost, edge_type type, int line_id = -1,int bike_time_cost = -1)
 {
-	add_directed_edge(first_vertex, second_vertex.id, time_cost, fare_cost, type, bike_time_cost);
-	add_directed_edge(second_vertex, first_vertex.id, time_cost, fare_cost, type, bike_time_cost);
+	add_directed_edge(first_vertex, second_vertex.id, time_cost, fare_cost, type, line_id, bike_time_cost);
+	add_directed_edge(second_vertex, first_vertex.id, time_cost, fare_cost, type, line_id, bike_time_cost);
 }
 
 /***************************************************************************
@@ -534,10 +563,13 @@ const edge_node* find_directed_edge(const vertex& from_vertex, int to)
   const int path[]：输出路径数组
   const int path_vertex_number：路径总长度
   bool allow_bike：允许骑行
+  const transit_line lines[]：线路数组
+  const int line_number：线路数量
   返 回 值：找不到过程边返回false，路线正确返回true
   说    明：path[]为反向数组，故反向遍历打印
 ***************************************************************************/
-bool output_route_guide(const vertex vertices[], const int path[], const int path_vertex_number, bool allow_bike)
+bool output_route_guide(const vertex vertices[], const int path[], const int path_vertex_number, bool allow_bike,
+	const transit_line lines[], const int line_number)
 {
 	cout << "推荐路线：";
 	for (int i = path_vertex_number - 1; i >= 0; i--)
@@ -562,10 +594,12 @@ bool output_route_guide(const vertex vertices[], const int path[], const int pat
 		switch (current_edge->type)
 		{
 			case edge_type::METRO:
-				type_way_in_chinese = "乘坐地铁";
-				break;
 			case edge_type::BUS:
-				type_way_in_chinese = "乘坐公交";
+				if (current_edge->line_id < 0 || current_edge->line_id >= line_number) {//只有地铁/公交才检查范围
+					cout << "路线编号范围错误" << endl;
+					return false;
+				}
+				type_way_in_chinese = "乘坐"+ lines[current_edge->line_id].name;
 				break;
 			case edge_type::TRANSFER:
 				if (time_cost < current_edge->time_cost)
@@ -667,8 +701,20 @@ int main()
 		output_one_step_vertex(vertices[i]);
 #endif
 
+	transit_line lines[max_lines];
+	int line_number = 0;
+	if (add_transit_line(lines, line_number, "地铁10号线", edge_type::METRO)) {
+#if test_mode
+		cout << lines[0].id << " " << lines[0].name << endl;
+#endif
+	}
+	else {
+		cout << "线路初始化失败" << endl;
+		return -1;
+	}
+
 	int start_vertex = 0;
-	int k = 8;
+	int k = 0;
 	double distance[max_vertices];
 	int previous_vertex[max_vertices];
 
@@ -693,7 +739,7 @@ int main()
 				if (path_vertex_number > 2)
 					intermediate_station_number = path_vertex_number - 2;
 				cout << "经停站数：" << intermediate_station_number << "站" << endl;
-				output_route_guide(vertices, path, path_vertex_number,allow_bike);
+				output_route_guide(vertices, path, path_vertex_number, allow_bike, lines,line_number);
 #if test_mode
 				output_dijkstra_arrays("最终寻路结果：", distance, previous_vertex, vertex_number);
 #endif 
@@ -761,6 +807,8 @@ int main()
 	cal.fare_cost = 0.5;
 	cout << calculate_weight(cal, 0) << endl << calculate_weight(cal, 8) << endl;
 #endif
+
+
 	
 	for (int i = 0; i < vertex_number; i++)
 		release_edges(vertices[i]);
