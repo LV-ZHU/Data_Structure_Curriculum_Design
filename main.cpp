@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <climits>
 #include <limits>
@@ -682,6 +683,23 @@ bool calculate_arrival_time(int start_hour, int start_minute, int total_minutes,
 ***************************************************************************/
 int main()
 {
+	ifstream lines_file("data/lines.csv");
+	if (!lines_file.is_open()) {
+		cout << "线路CSV文件无法打开，无法进行后续计算" << endl;
+		return 1;
+	}
+	string header;
+
+
+
+
+
+
+
+
+
+
+
 	vertex vertices[max_vertices];
 
 	int vertex_number = 0;//当前实际顶点数量，初始还没加站点所以为0
@@ -812,6 +830,8 @@ int main()
 	
 	for (int i = 0; i < vertex_number; i++)
 		release_edges(vertices[i]);
+
+	lines_file.close();
 
 	return 0;
 }
