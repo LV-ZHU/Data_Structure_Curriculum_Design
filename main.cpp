@@ -1,12 +1,19 @@
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <string>
 #include <climits>
 #include <limits>
 #include <iomanip>
 using namespace std;
 
-#define test_mode 0
+#define test_csv_lines 1 //文件打开、表头、整行和三个字段解析
+#define test_transit_lines 1 //线路添加、类型限制、编号连续性 
+#define test_adjacency_list	 0 //顶点、头插法、无向边、遍历、释放
+#define test_min_heap 0 //初始化、交换、上浮、扩容、下沉、弹出、空堆、释放
+#define test_weight 0 //时间、经济权值和骑行有效时间
+#define test_dijkstra 0 //松弛、前驱、重复入堆和旧堆节点跳过
+
 const int max_vertices = 100; //最多100个顶点
 const int max_lines = 50;//站点最多50个
 
@@ -689,13 +696,48 @@ int main()
 		return 1;
 	}
 	string header;
+	if (!getline(lines_file, header)) {//把lines_file第一行内容拿出，放入header里，当前文件指针位于第二行开头
+		cout << "首行信息读取失败" << endl;
+		return 2;
+	}
+#if test_csv_lines
+	cout << "首行header为：" << header << endl;
+#endif
+	string data_line;
+	if (!(getline(lines_file, data_line))) {
+		cout << "线路数据读取失败" << endl;
+		return 3;
+	}
+#if test_csv_lines
+	cout << "线路数据为：" << data_line << endl;
+#endif
+	string line_id_text;
+	string line_name_text;
+	string line_type_text;
+	stringstream line_stream(data_line);
+	if (!getline(line_stream, line_id_text, ',') || !getline(line_stream, line_name_text, ',')
+		|| !getline(line_stream, line_type_text, ',')) {
+		cout << "线路数据字段不完整" << endl;
+		return 3;
+	}
+		
+	int line_id = stoi(line_id_text);
+#if test_csv_lines
+	cout << "线路id为：" << line_id << endl;
+	cout << "线路名称为：" << line_name_text << endl;
+	cout << "线路类型为：" << line_type_text << endl;
 
+#endif	
 
-
-
-
-
-
+	edge_type line_type;
+	if (line_type_text == "METRO")
+		line_type = edge_type::METRO;
+	else if (line_type_text == "BUS")
+		line_type = edge_type::BUS;
+	else {
+		cout << "线路类型既不是地铁也不是公交，非法" << endl;
+		return -1;
+	}
 
 
 
@@ -706,7 +748,7 @@ int main()
 	add_vertex(vertices, vertex_number, "Tongji University", station_type::METRO);
 	add_vertex(vertices, vertex_number, "Siping Road", station_type::METRO);
 	add_vertex(vertices, vertex_number, "Guokang Road Siping Road", station_type::BUS);
-#if test_mode
+#if test_adjacency_list
 	cout << vertex_number << endl;
 #endif
 
@@ -714,22 +756,31 @@ int main()
 	add_undirected_edge(vertices[0], vertices[2], 6, 0, edge_type::TRANSFER, -1, 2);
 	add_undirected_edge(vertices[1], vertices[2], 2, 0, edge_type::TRANSFER, -1, -1);
 
-#if test_mode
+#if test_adjacency_list
 	for (int i = 0; i < vertex_number; i++)
 		output_one_step_vertex(vertices[i]);
 #endif
 
 	transit_line lines[max_lines];
 	int line_number = 0;
-	if (add_transit_line(lines, line_number, "地铁10号线", edge_type::METRO)) {
-#if test_mode
-		cout << lines[0].id << " " << lines[0].name << endl;
+	if (line_number == line_id) {//校验当前线路编号和CSV文件里读到的是否一致
+		if (add_transit_line(lines, line_number, line_name_text, line_type)) {
+#if test_csv_lines
+			cout << lines[line_id].id << " " << lines[line_id].name << endl;
 #endif
+		}
+		else {
+			cout << "线路初始化失败" << endl;
+			return -1;
+		}
 	}
 	else {
-		cout << "线路初始化失败" << endl;
+		cout << "线路编号不连续或顺序错误" << endl;
 		return -1;
 	}
+	
+	
+	
 
 	int start_vertex = 0;
 	int k = 0;
@@ -758,7 +809,7 @@ int main()
 					intermediate_station_number = path_vertex_number - 2;
 				cout << "经停站数：" << intermediate_station_number << "站" << endl;
 				output_route_guide(vertices, path, path_vertex_number, allow_bike, lines,line_number);
-#if test_mode
+#if test_dijkstra
 				output_dijkstra_arrays("最终寻路结果：", distance, previous_vertex, vertex_number);
 #endif 
 				cout << "总时间为：" << total_time_cost << "分钟" << endl
@@ -797,7 +848,7 @@ int main()
 		
 
 
-#if test_mode
+#if test_min_heap
 	min_heap test;
 	initialize_heap(test, 2);
 	insert_heap(test, 0, 2);
@@ -819,14 +870,12 @@ int main()
 	release_heap(test);
 #endif
 
-#if test_mode
+#if test_weight
 	edge_node cal;
 	cal.time_cost = 6;
 	cal.fare_cost = 0.5;
 	cout << calculate_weight(cal, 0) << endl << calculate_weight(cal, 8) << endl;
 #endif
-
-
 	
 	for (int i = 0; i < vertex_number; i++)
 		release_edges(vertices[i]);
