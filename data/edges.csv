@@ -1,0 +1,4 @@
+first_vertex_id,second_vertex_id,time_cost,fare_cost,type,line_id,bike_time_cost
+0,1,3,0.3,METRO,0,-1
+0,2,6,0,TRANSFER,-1,2
+1,2,2,0,TRANSFER,-1,-1

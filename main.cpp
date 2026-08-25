@@ -100,6 +100,8 @@ bool load_transit_lines(const string& file_path, transit_line lines[], int &line
 		cout << "首行信息读取失败" << endl;
 		return false;
 	}
+	if (header.substr(0, 3) == "\xEF\xBB\xBF")
+		header.erase(0, 3);//UTF8 BOM格式标识符是EF、BB、BF，如果是BOM格式去除前缀，非BOM格式的正常CSV则会跳过该if 
 #if test_csv_lines
 	cout << "首行header为：" << header << endl;
 #endif
@@ -135,13 +137,6 @@ bool load_transit_lines(const string& file_path, transit_line lines[], int &line
 			cout << "线路编号超范围" << endl;
 			return false;
 		}
-#if test_csv_lines
-		cout << "线路id为：" << line_id << endl;
-		cout << "线路名称为：" << line_name_text << endl;
-		cout << "线路类型为：" << line_type_text << endl;
-
-#endif	
-
 		edge_type line_type;
 		if (line_type_text == "METRO")
 			line_type = edge_type::METRO;
@@ -151,6 +146,14 @@ bool load_transit_lines(const string& file_path, transit_line lines[], int &line
 			cout << "线路类型既不是地铁也不是公交，非法" << endl;
 			return false;
 		}
+
+#if test_csv_lines
+		cout << "线路id为：" << line_id << endl;
+		cout << "线路名称为：" << line_name_text << endl;
+		cout << "线路类型为：" << line_type_text << endl;
+
+#endif	
+
 		if (line_number == line_id) {//校验当前线路编号和CSV文件里读到的是否一致
 			if (add_transit_line(lines, line_number, line_name_text, line_type)) {
 #if test_csv_lines
@@ -276,6 +279,106 @@ bool add_vertex(vertex vertices[max_vertices], int& vertex_number,string vertex_
 		vertex_number++;//全添加完再自增
 		return true;
 	}	
+}
+
+/***************************************************************************
+  函数名称：load_vertices
+  功    能：从指定CSV文件读取全部站点数据
+  输入参数：const string& file_path：要读取的站点CSV文件路径
+  vertex vertices[]：存放读取结果的站点数组
+  int& vertex_number：记录成功加入的站点数量
+  返 回 值：true代表读取成功，false代表读取失败
+  说    明：
+***************************************************************************/
+bool load_vertices(const string& file_path, vertex vertices[], int& vertex_number)
+{
+	ifstream stations_file(file_path);
+	if (!stations_file.is_open()) {
+		cout << "站点CSV文件无法打开，无法进行后续计算" << endl;
+		return false;
+	}
+	string header;	
+	if (!getline(stations_file, header)) {//把stations_file第一行内容拿出，放入header里，当前文件指针位于第二行开头
+		cout << "首行信息读取失败" << endl;
+		return false;
+	}
+	if (header.substr(0, 3) == "\xEF\xBB\xBF")
+		header.erase(0, 3);//UTF8 BOM格式标识符是EF、BB、BF，如果是BOM格式去除前缀，非BOM格式的正常CSV则会跳过该if 
+#if test_csv_lines
+	cout << "首行header为：" << header << endl;
+#endif
+	if (header != "id,name,type") {
+		cout << "该文件首行不是id,name,type，可能不是站点文件，请检查data/stations.csv 内容" << endl;
+		return false;
+	}
+
+	string data_line;
+	while (getline(stations_file, data_line)) {
+#if test_csv_lines
+		cout << "站点数据为：" << data_line << endl;
+#endif
+		string station_id_text;
+		string station_name_text;
+		string station_type_text;
+		stringstream station_stream(data_line);
+		if (!getline(station_stream, station_id_text, ',') || !getline(station_stream, station_name_text, ',')
+			|| !getline(station_stream, station_type_text, ',')) {//逐个获取三个字段，每次遇到,就停止
+			cout << "站点数据字段不完整" << endl;
+			return false;
+		}
+
+		int station_id;
+		try {
+			station_id = stoi(station_id_text);
+		}
+		catch (const invalid_argument&) {//检查参数是否合法
+			cout << "站点编号不是合法整数" << endl;
+			return false;
+		}
+		catch (const out_of_range&) {//检查参数是否超过int范围
+			cout << "站点编号超范围" << endl;
+			return false;
+		}
+		station_type parsed_station_type;
+		if (station_type_text == "METRO")
+			parsed_station_type = station_type::METRO;
+		else if (station_type_text == "BUS")
+			parsed_station_type = station_type::BUS;
+		else {//一般不会执行到这里
+			cout << "站点类型既不是地铁也不是公交，不在枚举类型里，非法" << endl;
+			return false;
+		}
+
+#if test_csv_lines
+		cout << "站点id为：" << station_id << endl;
+		cout << "站点名称为：" << station_name_text << endl;
+		cout << "站点类型为：" << station_type_text << endl;
+
+#endif	
+
+		if (vertex_number == station_id) {//校验当前站点编号和CSV文件里读到的是否一致
+			if (add_vertex(vertices, vertex_number, station_name_text, parsed_station_type)) {
+#if test_csv_lines
+				cout << vertices[station_id].id << " " << vertices[station_id].name << endl;
+#endif
+			}
+			else {
+				cout << "站点初始化失败" << endl;
+				return false;
+			}
+		}
+		else {
+			cout << "站点编号不连续或顺序错误" << endl;
+			return false;
+		}
+	}
+	if (vertex_number == 0) {//只有表头没有具体站点
+		cout << "站点CSV中没有有效站点数据" << endl;
+		return false;
+	}
+	stations_file.close();//关文件
+
+	return true;
 }
 
 /***************************************************************************
@@ -531,6 +634,194 @@ bool is_valid_vertex_id(const int vertex_id,const int vertex_number)
 		return false;
 }
 
+/***************************************************************************
+  函数名称：load_edges
+  功    能：从指定CSV文件读取全部边数据
+  输入参数：const string& file_path：要读取的边CSV文件路径
+  vertex vertices[]：需要修改邻接表的顶点数组
+  int vertex_number：检查两个端点编号
+  const transit_line lines[]：线路数组
+  int line_number：检查 line_id 范围
+  返 回 值：true代表读取成功，false代表读取失败
+  说    明：此处vertex_number转非引用是因为不再需要修改，仅用于检查范围；一行CSV表示一条无向边，函数内部调用add_undirected_edge创建两个方向
+***************************************************************************/
+bool load_edges(const string& file_path, vertex vertices[], int vertex_number, const transit_line lines[], int line_number)
+{
+	ifstream edges_file(file_path);
+	if (!edges_file.is_open()) {
+		cout << "边CSV文件无法打开，无法进行后续计算" << endl;
+		return false;
+	}
+	string header;
+	if (!getline(edges_file, header)) {//把edges_file第一行内容拿出，放入header里，当前文件指针位于第二行开头
+		cout << "首行信息读取失败" << endl;
+		return false;
+	}
+	if (header.substr(0, 3) == "\xEF\xBB\xBF")
+		header.erase(0, 3);//UTF8 BOM格式标识符是EF、BB、BF，如果是BOM格式去除前缀，非BOM格式的正常CSV则会跳过该if 
+#if test_csv_lines
+	cout << "首行header为：" << header << endl;
+#endif
+	if (header != "first_vertex_id,second_vertex_id,time_cost,fare_cost,type,line_id,bike_time_cost") {
+		cout << "该文件首行不是first_vertex_id,second_vertex_id,time_cost,fare_cost,type,line_id,bike_time_cost. 很可能不是边文件，请检查data/edges.csv 内容" << endl;
+		return false;
+	}
+
+	int current_line_number = 1;//记录为
+	string data_line;
+	while (getline(edges_file, data_line)) {
+
+#if test_csv_lines
+		cout << "边数据为：" << data_line << endl;
+#endif
+
+		string first_vertex_id_text;
+		string second_vertex_id_text;
+		string time_cost_text;
+		string fare_cost_text;
+		string edge_type_text;
+		string line_id_text;
+		string bike_time_cost_text;
+		stringstream edges_stream(data_line);
+		if (!getline(edges_stream, first_vertex_id_text, ',') ||
+			!getline(edges_stream, second_vertex_id_text, ',') ||
+			!getline(edges_stream, time_cost_text, ',') ||
+			!getline(edges_stream, fare_cost_text, ',') ||
+			!getline(edges_stream, edge_type_text, ',') ||
+			!getline(edges_stream, line_id_text, ',') ||
+			!getline(edges_stream, bike_time_cost_text, ',')) {//逐个获取七个字段，每次遇到,就停止
+			cout << "边数据字段不完整" << endl;
+			return false;
+		}
+		int first_vertex_id;
+		int second_vertex_id;
+		int time_cost;
+		double fare_cost;
+		int line_id;
+		int bike_time_cost;
+		try {
+			first_vertex_id = stoi(first_vertex_id_text);
+			second_vertex_id = stoi(second_vertex_id_text);
+			time_cost = stoi(time_cost_text);
+			fare_cost = stod(fare_cost_text);//注意，fare_cost是double型所以用stod
+			line_id = stoi(line_id_text);
+			bike_time_cost = stoi(bike_time_cost_text);
+		}
+		catch (const invalid_argument&) {
+			cout << "第" << current_line_number << "条边" << "某个数字字段非数字类型" << endl;
+			return false;
+		}
+		catch (const out_of_range&) {
+			cout << "第" << current_line_number << "条边" << "某个数字字段超过合法范围" << endl;
+			return false;
+		}
+		edge_type parsed_edge_type;
+		if (edge_type_text == "METRO")
+			parsed_edge_type = edge_type::METRO;
+		else if (edge_type_text == "BUS")
+			parsed_edge_type = edge_type::BUS;
+		else if (edge_type_text == "TRANSFER")
+			parsed_edge_type = edge_type::TRANSFER;
+		else {//一般不会执行到这里
+			cout << "第" << current_line_number << "条边" << "边类型既不是地铁也不是公交也不是换乘，非法" << endl;
+			return false;
+		}
+
+		if (!is_valid_vertex_id(first_vertex_id, vertex_number) ||
+			!is_valid_vertex_id(second_vertex_id, vertex_number)) {//顶点编号范围
+			cout << "第" << current_line_number << "条边" << "站点编号范围不合法" << endl;
+			return false;
+		}
+		if (first_vertex_id == second_vertex_id) {//检查起点终点编号
+			cout << "第" << current_line_number << "条边" << "站点起点终点编号相同，形成错误自环" << endl;
+			return false;
+		}
+		if (time_cost <= 0) {
+			cout << "第" << current_line_number << "条边" << "时间小于等于0，数据错误的权重不能用Dijkstra" << endl;
+			return false;
+		}
+		if (fare_cost < 0) {
+			cout << "第" << current_line_number << "条边" << "费用小于0，数据错误的权重不能用Dijkstra" << endl;
+			return false;
+		} 
+		if (parsed_edge_type == edge_type::METRO || parsed_edge_type == edge_type::BUS) {
+			if (line_id < 0 || line_id >= line_number) {
+				cout << "第" << current_line_number << "条边" << "公交/地铁线路的编号范围错误" << endl;
+				return false;
+			}
+			if (lines[line_id].type!= parsed_edge_type) {
+				cout << "第" << current_line_number << "条边" << "线路类型和CSV类型不匹配" << endl;
+				return false;
+			}
+			if (bike_time_cost != -1) {
+				cout << "第" << current_line_number << "条边" << "线路类型为地铁或公交，但骑行边非-1，是否输入了错误的类型？" << endl;
+				return false;
+			}
+			switch (parsed_edge_type) {
+				case edge_type::METRO:
+					if (vertices[first_vertex_id].type != station_type::METRO || vertices[second_vertex_id].type != station_type::METRO) {
+						cout << "第" << current_line_number << "条地铁边的两端不全是地铁站，类型错误" << endl;
+						return false;
+					}
+					break;
+				case edge_type::BUS:
+					if (vertices[first_vertex_id].type != station_type::BUS || vertices[second_vertex_id].type != station_type::BUS) {
+						cout << "第" << current_line_number << "条公交边的两端不全是公交站，类型错误" << endl;
+						return false;
+					}
+					break;
+			}
+		}
+		else if (parsed_edge_type == edge_type::TRANSFER) {
+			if (line_id != -1) {
+				cout << "第" << current_line_number << "条边" << "线路类型为换乘，但线路编号非-1，是否输入了错误的类型？" << endl;
+				return false;
+			}
+			if (fare_cost != 0) {
+				cout << "第" << current_line_number << "条边" << "线路类型为换乘，但费用不为0，是否输入了错误的类型？" << endl;
+				return false;
+			}
+			if (vertices[first_vertex_id].type == vertices[second_vertex_id].type) {
+				cout << "第" << current_line_number << "条换乘边的两端站点类型相同" << endl;
+				return false;
+			}
+			if (bike_time_cost != -1 && (bike_time_cost <= 0 || bike_time_cost >= time_cost)){
+				cout << "第" << current_line_number << "条边" << "是换乘边，允许骑行，但是骑行耗时不合法(非正值或并未比步行节省时间)" << endl;
+				return false;
+			}
+		}
+		
+			
+		
+		
+
+	
+
+#if test_csv_lines
+		cout << "边的一端顶点编号为：" << first_vertex_id << endl;
+		cout << "边的另一端顶点编号为：" << second_vertex_id << endl;
+		cout << "边的时间花费为：" << time_cost << endl;
+		cout << "边的费用为：" << fare_cost << endl;
+		cout << "边的类型为：" << edge_type_text << endl;
+		cout << "线路编号为：" << line_id << endl;
+		cout << "边骑行时长为：" << bike_time_cost << endl;
+#endif	
+
+
+
+		add_undirected_edge(vertices[first_vertex_id], vertices[second_vertex_id],
+			time_cost, fare_cost, parsed_edge_type, line_id, bike_time_cost);
+		current_line_number++;
+	}
+
+	if (current_line_number == 1) {//依然停留在1，表示只有表头没有具体边
+		cout << "边CSV中没有有效边数据" << endl;
+		return false;
+	}
+	edges_file.close();//关文件
+
+	return true;
+}
 
 /***************************************************************************
   函数名称：dijkstra
@@ -787,38 +1078,31 @@ int main()
 {
 	string lines_path = "data/lines.csv";//线路CSV路径
 	string stations_path = "data/stations.csv";//站点CSV路径
+	string edges_path = "data/edges.csv";//边CSV路径
 	transit_line lines[max_lines];
-	int line_number = 0;
-	
+	int line_number = 0;//当前实际线路数量，初始还没加站点所以为0
 	if (!load_transit_lines(lines_path, lines, line_number)) {
-		cout << "加载CSV文件失败" << endl;
-		return 5;
+		cout << "加载线路CSV文件失败" << endl;
+		return 1;
 	}
 
 	vertex vertices[max_vertices];
-
 	int vertex_number = 0;//当前实际顶点数量，初始还没加站点所以为0
-	add_vertex(vertices, vertex_number, "同济大学", station_type::METRO);
-	add_vertex(vertices, vertex_number, "四平路", station_type::METRO);
-	add_vertex(vertices, vertex_number, "国康路四平路", station_type::BUS);
-#if test_adjacency_list
-	cout << vertex_number << endl;
-#endif
+	if (!load_vertices(stations_path, vertices, vertex_number)) {
+		cout << "加载站点CSV文件失败" << endl;
+		return 2;
+	}
 
-	add_undirected_edge(vertices[0], vertices[1], 3, 0.3, edge_type::METRO, 0);
-	add_undirected_edge(vertices[0], vertices[2], 6, 0, edge_type::TRANSFER, -1, 2);
-	add_undirected_edge(vertices[1], vertices[2], 2, 0, edge_type::TRANSFER, -1, -1);
+	if (!load_edges(edges_path, vertices, vertex_number, lines, line_number)) {
+		cout << "加载边CSV文件失败" << endl;
+		return 3;
+	}
+	
 
 #if test_adjacency_list
 	for (int i = 0; i < vertex_number; i++)
 		output_one_step_vertex(vertices[i]);
 #endif
-
-	
-	
-	
-	
-	
 
 	int start_vertex = 0;
 	int k = 0;
