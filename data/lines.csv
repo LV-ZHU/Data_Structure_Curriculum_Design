@@ -1,2 +1,3 @@
-锘縤d,name,type
-0,鍦伴搧10鍙风嚎,METRO
+id,name,type
+0,地铁10号线,METRO
+1,测试公交线路,BUS
