@@ -6,16 +6,18 @@
 #include <limits>
 #include <iomanip>
 #include <stdexcept>
+#include <graphics.h>
 using namespace std;
 
-#define test_csv_lines 1 //文件打开、表头、整行和三个字段解析
-#define test_transit_lines 1 //线路添加、类型限制、编号连续性 
+#define test_csv_lines 0 //文件打开、表头、整行和三个字段解析
+#define test_transit_lines 0 //线路添加、类型限制、编号连续性 
 #define test_adjacency_list	 0 //顶点、头插法、无向边、遍历、释放
 #define test_min_heap 0 //初始化、交换、上浮、扩容、下沉、弹出、空堆、释放
 #define test_weight 0 //时间、经济权值和骑行有效时间
 #define test_dijkstra 0 //松弛、前驱、重复入堆和旧堆节点跳过
 
-const int max_vertices = 100; //最多100个顶点
+const int max_vertices = 150; //最多150个顶点
+const int physical_vertex_number = 92; //前92个为EasyX可见、可点击的真实物理节点
 const int max_lines = 50;//线路最多50条
 
 enum class edge_type { METRO, BUS, TRANSFER };//边类型：地铁，公交，换乘
@@ -37,6 +39,8 @@ struct vertex {
 	string name = "";//站点名称
 	station_type type = station_type::METRO;//站点类型，默认为地铁
 	edge_node* first_edge = nullptr;//邻接链表的第一个边节点地址
+	int x;//EasyX需要的站点圆心x坐标
+	int y;//EasyX需要的站点圆心y坐标
 };
 //候选顶点及其距离结构体
 struct heap_node {
@@ -55,7 +59,31 @@ struct transit_line {
 	string name = "";//线路中文名称
 	edge_type type= edge_type::METRO;//线路类型，默认为地铁，只允许是地铁/公交类型不允许为换乘
 };
+//EasyX界面状态
+struct ui_state {
+	int start_vertex = -1;
+	int end_vertex = -1;
+	int k = 0;
+	bool allow_bike = false;
 
+	int start_hour = 8;
+	int start_minute = 30;
+
+	double distance[max_vertices];
+	int previous_vertex[max_vertices];
+	const edge_node* previous_edge[max_vertices];
+	int path[max_vertices];
+	int path_vertex_number = 0;
+	
+	int total_time_cost = 0;
+	double total_fare_cost = 0;
+	int arrival_hour = 0;
+	int arrival_minute = 0;
+	int days_passed = 0;
+
+	bool route_ready = false;
+	string message = "请选择起点";
+};
 /***************************************************************************
   函数名称：add_transit_line
   功    能：添加一条线路
@@ -265,10 +293,12 @@ void output_one_step_vertex(vertex& start_station)
   int& vertex_number：当前顶点数量的引用，实时修改所以使用引用
   string vertex_name：站点名称
   station_type type：站点类型
+  int x：站点圆心x坐标
+  int y：站点圆心y坐标
   返 回 值：true(1)为正常，false(0)为已经放满
   说    明：先添加，再自增，从0开始
 ***************************************************************************/
-bool add_vertex(vertex vertices[max_vertices], int& vertex_number,string vertex_name, station_type type)
+bool add_vertex(vertex vertices[max_vertices], int& vertex_number, string vertex_name, station_type type, int x, int y)
 {
 	if (vertex_number >= max_vertices)
 		return false;//超额，添加失败
@@ -276,6 +306,8 @@ bool add_vertex(vertex vertices[max_vertices], int& vertex_number,string vertex_
 		vertices[vertex_number].id = vertex_number;//id即为当前号码
 		vertices[vertex_number].name = vertex_name;
 		vertices[vertex_number].type= type;
+		vertices[vertex_number].x = x;
+		vertices[vertex_number].y = y;
 		vertex_number++;//全添加完再自增
 		return true;
 	}	
@@ -307,7 +339,7 @@ bool load_vertices(const string& file_path, vertex vertices[], int& vertex_numbe
 #if test_csv_lines
 	cout << "首行header为：" << header << endl;
 #endif
-	if (header != "id,name,type") {
+	if (header != "id,name,type,x,y") {
 		cout << "该文件首行不是id,name,type，可能不是站点文件，请检查data/stations.csv 内容" << endl;
 		return false;
 	}
@@ -320,23 +352,33 @@ bool load_vertices(const string& file_path, vertex vertices[], int& vertex_numbe
 		string station_id_text;
 		string station_name_text;
 		string station_type_text;
+		string station_x_text;
+		string station_y_text;
 		stringstream station_stream(data_line);
-		if (!getline(station_stream, station_id_text, ',') || !getline(station_stream, station_name_text, ',')
-			|| !getline(station_stream, station_type_text, ',')) {//逐个获取三个字段，每次遇到,就停止
+		if (!getline(station_stream, station_id_text, ',') 
+			|| !getline(station_stream, station_name_text, ',')
+			|| !getline(station_stream, station_type_text, ',')
+			|| !getline(station_stream, station_x_text, ',')
+			|| !getline(station_stream, station_y_text, ',')
+			) {//逐个获取五个字段，每次遇到,就停止
 			cout << "站点数据字段不完整" << endl;
 			return false;
 		}
 
 		int station_id;
+		int station_x;
+		int station_y;
 		try {
 			station_id = stoi(station_id_text);
+			station_x = stoi(station_x_text);
+			station_y = stoi(station_y_text);
 		}
 		catch (const invalid_argument&) {//检查参数是否合法
-			cout << "站点编号不是合法整数" << endl;
+			cout << "站点编号/坐标不是合法整数" << endl;
 			return false;
 		}
 		catch (const out_of_range&) {//检查参数是否超过int范围
-			cout << "站点编号超范围" << endl;
+			cout << "站点编号/坐标超范围" << endl;
 			return false;
 		}
 		station_type parsed_station_type;
@@ -353,11 +395,12 @@ bool load_vertices(const string& file_path, vertex vertices[], int& vertex_numbe
 		cout << "站点id为：" << station_id << endl;
 		cout << "站点名称为：" << station_name_text << endl;
 		cout << "站点类型为：" << station_type_text << endl;
-
+		cout << "站点x坐标为：" << station_x_text << endl;
+		cout << "站点y坐标为：" << station_y_text << endl;
 #endif	
 
 		if (vertex_number == station_id) {//校验当前站点编号和CSV文件里读到的是否一致
-			if (add_vertex(vertices, vertex_number, station_name_text, parsed_station_type)) {
+			if (add_vertex(vertices, vertex_number, station_name_text, parsed_station_type, station_x, station_y)) {
 #if test_csv_lines
 				cout << vertices[station_id].id << " " << vertices[station_id].name << endl;
 #endif
@@ -736,7 +779,7 @@ bool load_edges(const string& file_path, vertex vertices[], int vertex_number, c
 			cout << "第" << current_line_number << "条边" << "站点起点终点编号相同，形成错误自环" << endl;
 			return false;
 		}
-		if (time_cost <= 0) {
+		if (time_cost < 0) {//注意，0也不行，因为要处理公交站问题
 			cout << "第" << current_line_number << "条边" << "时间小于等于0，数据错误的权重不能用Dijkstra" << endl;
 			return false;
 		}
@@ -779,10 +822,6 @@ bool load_edges(const string& file_path, vertex vertices[], int vertex_number, c
 			}
 			if (fare_cost != 0) {
 				cout << "第" << current_line_number << "条边" << "线路类型为换乘，但费用不为0，是否输入了错误的类型？" << endl;
-				return false;
-			}
-			if (vertices[first_vertex_id].type == vertices[second_vertex_id].type) {
-				cout << "第" << current_line_number << "条换乘边的两端站点类型相同" << endl;
 				return false;
 			}
 			if (bike_time_cost != -1 && (bike_time_cost <= 0 || bike_time_cost >= time_cost)){
@@ -832,13 +871,15 @@ bool load_edges(const string& file_path, vertex vertices[], int vertex_number, c
    int k：时间+k×费用里的策略参数k
    double distance[]：完成dijkstra流程时维护的最短路径长数组
    int previous_vertex[]：完成dijkstra流程时维护的前驱数组顶点，记录路径
+	const edge_node* previous_edge[]：保存最短路径中到达各顶点实际采用的边
    bool allow_bike = false：是否允许骑车，默认不允许
   返 回 值：参数不在正确范围内或堆操作失败返回false，成功返回true
   说    明：distance和previous_vertex是结果数组,为需要修改的核心表格，函数内部会进行修改
 	由于同一套顶点允许多次入堆，不采用visited数组写法bool visited[max_vertices] = {false}，
-    而是判断堆里的distance元素是否已更新为distance结果数组里的最小值
+	而是判断堆里的distance元素是否已更新为distance结果数组里的最小值
 ***************************************************************************/
-bool dijkstra(vertex vertices[], int vertex_number, int start_vertex, int k, double distance[], int previous_vertex[], bool allow_bike = false)
+bool dijkstra(vertex vertices[], int vertex_number, int start_vertex, int k, double distance[], int previous_vertex[],
+	const edge_node* previous_edge[], bool allow_bike = false)
 {
 	//范围检查
 	if (vertex_number <= 0 || vertex_number > max_vertices)
@@ -851,11 +892,14 @@ bool dijkstra(vertex vertices[], int vertex_number, int start_vertex, int k, dou
 	for (int i = 0; i < vertex_number; i++)
 		distance[i] = std::numeric_limits<double>::infinity();
 	distance[start_vertex] = 0;//从起点到起点距离显然为0，起点到其余为inf
-	for (int i = 0; i < vertex_number; i++)
+	for (int i = 0; i < vertex_number; i++) {
 		previous_vertex[i] = -1;//初始化为-1，约定-1代表当前还没有前驱节点
-	
+		previous_edge[i] = nullptr;
+	}
+		
+
 	min_heap heap;
-	if(!initialize_heap(heap, vertex_number))
+	if (!initialize_heap(heap, vertex_number))
 		return false;
 	if (!insert_heap(heap, start_vertex, distance[start_vertex])) {
 		release_heap(heap);//插入失败，则释放
@@ -879,10 +923,11 @@ bool dijkstra(vertex vertices[], int vertex_number, int start_vertex, int k, dou
 			if (candidate_distance < distance[next_vertex]) {//如果候选距离比原来的距离小，就更新
 				distance[next_vertex] = candidate_distance;//更新distance数组记录的距离
 				previous_vertex[next_vertex] = current_vertex;//更新前驱数组记录的前驱顶点
-				if (!insert_heap(heap, next_vertex, distance[next_vertex])){//把邻接顶点加入堆中，等待下一轮弹出
+				previous_edge[next_vertex] = current_edge;
+				if (!insert_heap(heap, next_vertex, distance[next_vertex])) {//把邻接顶点加入堆中，等待下一轮弹出
 					release_heap(heap);//插入失败，则释放
 					return false;
-				}	
+				}
 			}
 
 			current_edge = current_edge->next;
@@ -912,21 +957,21 @@ bool build_paths(const int previous_vertex[], int vertex_number, int start_verte
 		return false;//顶点数应该在1..max_vertices之间
 	if (!(is_valid_vertex_id(start_vertex, vertex_number) && is_valid_vertex_id(end_vertex, vertex_number)))
 		return false;//起点、终点下标都应该在0..vertex_number-1之间
-	
+
 	path_vertex_number = 0;//不依赖传入的值，重置为0，因为用的引用所以无法设置函数默认参数
 	int current_vertex = end_vertex;
-	while (path_vertex_number<vertex_number) {//若大于等于vertex_number根据鸽巢原理一定有重复顶点出现，则有环
-		if (!is_valid_vertex_id(current_vertex,vertex_number)) {//不可达，正常情况下这种情况current_vertex为-1
+	while (path_vertex_number < vertex_number) {//若大于等于vertex_number根据鸽巢原理一定有重复顶点出现，则有环
+		if (!is_valid_vertex_id(current_vertex, vertex_number)) {//不可达，正常情况下这种情况current_vertex为-1
 			path_vertex_number = 0;
 			return false;
 		}
 		path[path_vertex_number] = current_vertex;
 		path_vertex_number++;
-		if (current_vertex == start_vertex) 
+		if (current_vertex == start_vertex)
 			return true;//找到起点则返回true，注意此处等号左边不能用path[path_vertex_number]，因为path_vertex_number已经自增
-		
+
 		current_vertex = previous_vertex[current_vertex];//更新current_vertex为它的前驱节点
-		
+
 	}
 	//不满足path_vertex_number<vertex_number，说明不正常
 	path_vertex_number = 0;
@@ -957,14 +1002,20 @@ const edge_node* find_directed_edge(const vertex& from_vertex, int to)
   输入参数：const vertex vertices[]：顶点数组
   const int path[]：输出路径数组
   const int path_vertex_number：路径总长度
+  const edge_node* previous_edge[]：Dijkstra实际选中的前驱边数组
   bool allow_bike：允许骑行
   const transit_line lines[]：线路数组
   const int line_number：线路数量
   返 回 值：找不到过程边返回false，路线正确返回true
   说    明：path[]为反向数组，故反向遍历打印
 ***************************************************************************/
-bool output_route_guide(const vertex vertices[], const int path[], const int path_vertex_number, bool allow_bike,
-	const transit_line lines[], const int line_number)
+bool output_route_guide(const vertex vertices[],
+	const int path[],
+	const int path_vertex_number,
+	const edge_node* previous_edge[],
+	bool allow_bike,
+	const transit_line lines[],
+	const int line_number)
 {
 	cout << "推荐路线：";
 	for (int i = path_vertex_number - 1; i >= 0; i--)
@@ -978,7 +1029,7 @@ bool output_route_guide(const vertex vertices[], const int path[], const int pat
 		int from_vertex_id = path[start_position];//起点顶点编号
 		int end_position = start_position - 1;
 		int to_vertex_id = path[end_position];//终点顶点编号
-		const edge_node* current_edge = find_directed_edge(vertices[from_vertex_id], to_vertex_id);
+		const edge_node* current_edge = previous_edge[to_vertex_id];
 		if (!current_edge) {
 			cout << "路线数据错误" << endl;
 			return false;
@@ -994,7 +1045,7 @@ bool output_route_guide(const vertex vertices[], const int path[], const int pat
 					cout << "路线编号范围错误" << endl;
 					return false;
 				}
-				type_way_in_chinese = "乘坐"+ lines[current_edge->line_id].name;
+				type_way_in_chinese = "乘坐" + lines[current_edge->line_id].name;
 				break;
 			case edge_type::TRANSFER:
 				if (time_cost < current_edge->time_cost)
@@ -1024,19 +1075,37 @@ bool output_route_guide(const vertex vertices[], const int path[], const int pat
   返 回 值：成功为true，找不到路径中的边则为false
   说    明：find_directed_edge返回边指针；调用get_effective_time_cost函数时需要解引用该指针
 ***************************************************************************/
-bool calculate_path_statistics(const vertex vertices[], const int path[],
-	int path_vertex_number, int& total_time_cost, double& total_fare_cost, bool allow_bike = false)
+/***************************************************************************
+  函数名称：calculate_path_statistics
+  功    能：根据Dijkstra实际采用的前驱边统计路径总时间和总费用
+  输入参数：const int path[]：路径倒序数组
+  int path_vertex_number：路径中的顶点数量
+  const edge_node* previous_edge[]：Dijkstra保存的各顶点实际前驱边
+  int& total_time_cost：存放总耗时
+  double& total_fare_cost：存放总费用
+  bool allow_bike：是否允许骑行，默认false
+  返 回 值：统计成功返回true，路径中的前驱边无效返回false
+  说    明：path[]按照终点到起点倒序保存；对于相邻的path[i]和path[i-1]，
+  到达path[i-1]所实际采用的边就是previous_edge[path[i-1]]
+***************************************************************************/
+bool calculate_path_statistics(const int path[],
+	int path_vertex_number,
+	const edge_node* previous_edge[],
+	int& total_time_cost,
+	double& total_fare_cost,
+	bool allow_bike = false)
 {
 	total_time_cost = 0;
 	total_fare_cost = 0;
+
 	for (int i = path_vertex_number - 1; i > 0; i--) {
-		const edge_node* current_edge = find_directed_edge(vertices[path[i]], path[i - 1]);
-		if (current_edge) {
-			total_time_cost += get_effective_time_cost(*current_edge, allow_bike);
-			total_fare_cost += current_edge->fare_cost;
-		}
-		else
+		int to_vertex = path[i - 1];
+		const edge_node* current_edge = previous_edge[to_vertex];
+		if (!current_edge)
 			return false;
+		total_time_cost +=
+			get_effective_time_cost(*current_edge, allow_bike);
+		total_fare_cost += current_edge->fare_cost;
 	}
 
 	return true;
@@ -1054,8 +1123,8 @@ bool calculate_path_statistics(const vertex vertices[], const int path[],
   返 回 值：参数符合范围为true，不符合范围则为false
   说    明：后三个参数为输出参数，故使用引用
 ***************************************************************************/
-bool calculate_arrival_time(int start_hour, int start_minute, int total_minutes, 
-	int& arrival_hour,int& arrival_minute, int& days_passed)
+bool calculate_arrival_time(int start_hour, int start_minute, int total_minutes,
+	int& arrival_hour, int& arrival_minute, int& days_passed)
 {
 	if (start_hour < 0 || start_hour>23 || start_minute < 0 || start_minute>59 || total_minutes < 0)
 		return false;
@@ -1063,9 +1132,717 @@ bool calculate_arrival_time(int start_hour, int start_minute, int total_minutes,
 	days_passed = total_arrival_minutes / 1440;
 	int remain_minutes_in_one_day = total_arrival_minutes % 1440;
 	arrival_hour = remain_minutes_in_one_day / 60;
-	arrival_minute= remain_minutes_in_one_day % 60;
+	arrival_minute = remain_minutes_in_one_day % 60;
 	return true;
 }
+
+/***************************************************************************
+  函数名称：draw_all_edges
+  功    能：在EasyX窗口中绘制当前邻接表里的全部无向边
+  输入参数：const vertex vertices[]：顶点数组
+  int vertex_number：顶点数量
+  返 回 值：无
+  说    明：无向边在邻接表中保存两个方向，只在当前顶点编号小于目标顶点编号时绘制，避免重复绘制
+***************************************************************************/
+void draw_all_edges(const vertex vertices[], int vertex_number)
+{
+	for (int i = 0; i < vertex_number; i++) {
+		const edge_node* current_edge = vertices[i].first_edge;
+		while (current_edge) {
+			if (i < current_edge->to) {//无向边只处理编号较小的一端，防止重复处理
+				if (current_edge->type == edge_type::TRANSFER) {
+					setlinecolor(RGB(135, 145, 153));
+					setlinestyle(PS_DASH, 1);
+				}
+				else if (current_edge->type == edge_type::BUS) {
+					if (current_edge->line_id == 10 || current_edge->line_id == 11)
+						setlinecolor(RGB(47, 124, 89));
+					else
+						setlinecolor(RGB(33, 118, 163));
+					setlinestyle(PS_SOLID, 2);
+				}
+				else {
+					switch (current_edge->line_id) {
+						case 0:
+							setlinecolor(RGB(111, 75, 126));
+							break;
+						case 1:
+							setlinecolor(RGB(124, 74, 43));
+							break;
+						case 2:
+							setlinecolor(RGB(123, 115, 15));
+							break;
+						case 3:
+							setlinecolor(RGB(177, 36, 50));
+							break;
+						default:
+							setlinecolor(RGB(70, 100, 150));
+							break;
+					}
+					setlinestyle(PS_SOLID, 3);
+				}
+
+				line(vertices[i].x, vertices[i].y,
+					vertices[current_edge->to].x, vertices[current_edge->to].y);
+			}
+			current_edge = current_edge->next;
+		}
+	}
+	setlinestyle(PS_SOLID, 1);
+}
+
+/***************************************************************************
+  函数名称：draw_all_vertices
+  功    能：在EasyX窗口中绘制全部站点圆圈
+  输入参数：const vertex vertices[]：顶点数组
+  int vertex_number：顶点数量
+  返 回 值：无
+  说    明：地铁站使用蓝色边框，公交/地点节点使用橙色边框；本阶段暂不绘制站名
+***************************************************************************/
+void draw_all_vertices(const vertex vertices[], int vertex_number)
+{
+	setlinestyle(PS_SOLID, 1);
+	setfillcolor(RGB(255, 255, 255));
+
+	int draw_vertex_number = vertex_number;
+
+	if (draw_vertex_number > physical_vertex_number)
+		draw_vertex_number = physical_vertex_number;
+
+	for (int i = 0; i < draw_vertex_number; i++) {
+		if (vertices[i].type == station_type::METRO)
+			setlinecolor(RGB(40, 120, 212));
+		else
+			setlinecolor(RGB(220, 122, 36));
+
+		fillcircle(vertices[i].x, vertices[i].y, 5);
+	}
+}
+
+/***************************************************************************
+  函数名称：find_clicked_vertex
+  功    能：根据鼠标点击位置判断是否选中了某个站点
+  输入参数：const vertex vertices[]：顶点数组
+  int vertex_number：顶点数量
+  int mouse_x：鼠标点击位置的x坐标
+  int mouse_y：鼠标点击位置的y坐标
+  返 回 值：命中站点返回对应顶点下标，未命中任何站点返回-1
+  说    明：站点显示半径为5，点击判定半径使用10以提高鼠标操作容错性
+***************************************************************************/
+int find_clicked_vertex(const vertex vertices[], int vertex_number,
+	int mouse_x, int mouse_y)
+{
+	const int click_radius = 10;
+	int clickable_vertex_number = vertex_number;
+
+	if (clickable_vertex_number > physical_vertex_number)
+		clickable_vertex_number = physical_vertex_number;
+
+	for (int i = 0; i < clickable_vertex_number; i++) {
+		int dx = mouse_x - vertices[i].x;
+		int dy = mouse_y - vertices[i].y;
+
+		if (dx * dx + dy * dy <= click_radius * click_radius)
+			return i;
+	}
+
+	return -1;
+}
+
+/***************************************************************************
+  函数名称：is_point_in_rectangle
+  功    能：判断指定坐标是否位于一个矩形区域内部
+  输入参数：int point_x：需要判断的点的x坐标
+  int point_y：需要判断的点的y坐标
+  int left：矩形左边界
+  int top：矩形上边界
+  int right：矩形右边界
+  int bottom：矩形下边界
+  返 回 值：位于矩形内部返回true，否则返回false
+  说    明：EasyX屏幕坐标系原点位于左上角，x向右增大，y向下增大
+***************************************************************************/
+bool is_point_in_rectangle(int point_x, int point_y,
+	int left, int top, int right, int bottom)
+{
+	return point_x >= left && point_x <= right
+		&& point_y >= top && point_y <= bottom;
+}
+
+/***************************************************************************
+  函数名称：draw_selected_vertices
+  功    能：在普通站点上方额外绘制当前选中的起点和终点标记
+  输入参数：const vertex vertices[]：顶点数组
+  int vertex_number：顶点数量
+  const ui_state& state：当前EasyX界面状态
+  返 回 值：无
+  说    明：起点使用绿色圆形，终点使用红色圆形；只有编号合法时才绘制
+***************************************************************************/
+void draw_selected_vertices(const vertex vertices[], int vertex_number,
+	const ui_state& state)
+{
+	if (is_valid_vertex_id(state.start_vertex, vertex_number)) {
+		setlinecolor(RGB(20, 110, 60));
+		setfillcolor(RGB(47, 191, 113));
+		fillcircle(vertices[state.start_vertex].x,
+			vertices[state.start_vertex].y, 8);
+	}
+
+	if (is_valid_vertex_id(state.end_vertex, vertex_number)) {
+		setlinecolor(RGB(140, 35, 35));
+		setfillcolor(RGB(239, 90, 90));
+		fillcircle(vertices[state.end_vertex].x,
+			vertices[state.end_vertex].y, 8);
+	}
+}
+
+/***************************************************************************
+  函数名称：draw_route_highlight
+  功    能：根据当前规划出的path数组绘制黄色推荐路线
+  输入参数：const vertex vertices[]：顶点数组
+  const ui_state& state：当前EasyX界面状态
+  返 回 值：无
+  说    明：path数组按照终点到起点倒序存储，因此绘制时从数组末尾向前遍历
+***************************************************************************/
+void draw_route_highlight(const vertex vertices[], const ui_state& state)
+{
+	if (!state.route_ready || state.path_vertex_number < 2)
+		return;
+
+	setlinecolor(RGB(255, 210, 40));
+	setlinestyle(PS_SOLID, 7);
+
+	for (int i = state.path_vertex_number - 1; i > 0; i--) {
+		int from_vertex = state.path[i];
+		int to_vertex = state.path[i - 1];
+		bool from_is_virtual = from_vertex >= physical_vertex_number;
+		bool to_is_virtual = to_vertex >= physical_vertex_number;
+
+		//物理节点与对应公交状态节点之间只是上下车计费边，不作为乘车指南的一段显示
+		if (from_is_virtual != to_is_virtual)
+			continue;
+
+		line(vertices[from_vertex].x, vertices[from_vertex].y,
+			vertices[to_vertex].x, vertices[to_vertex].y);
+	}
+
+	setlinestyle(PS_SOLID, 1);
+}
+
+/***************************************************************************
+  函数名称：draw_control_panel
+  功    能：绘制EasyX窗口右侧控制区域，包括起终点、时间、策略、骑行和操作按钮
+  输入参数：const vertex vertices[]：顶点数组
+  int vertex_number：顶点数量
+  const ui_state& state：当前EasyX界面状态
+  返 回 值：无
+  说    明：右侧面板范围约为x=900~1199；按钮坐标需要和handle_left_click中的判断保持一致
+***************************************************************************/
+void draw_control_panel(const vertex vertices[], int vertex_number,
+	const ui_state& state)
+{
+	setbkmode(TRANSPARENT);
+	settextcolor(RGB(35, 45, 60));
+	settextstyle(18, 0, "微软雅黑");
+
+	outtextxy(920, 20, "城市多模态交通导航");
+
+	outtextxy(920, 60, "起点：");
+	if (is_valid_vertex_id(state.start_vertex, vertex_number))
+		outtextxy(980, 60, vertices[state.start_vertex].name.c_str());
+	else
+		outtextxy(980, 60, "未选择");
+
+	outtextxy(920, 90, "终点：");
+	if (is_valid_vertex_id(state.end_vertex, vertex_number))
+		outtextxy(980, 90, vertices[state.end_vertex].name.c_str());
+	else
+		outtextxy(980, 90, "未选择");
+
+	outtextxy(920, 135, "出发时间");
+
+	setlinecolor(RGB(150, 160, 170));
+
+	rectangle(930, 165, 980, 200);
+	outtextxy(947, 172, "-5");
+
+	stringstream time_stream;
+	time_stream << setw(2) << setfill('0') << state.start_hour
+		<< ":" << setw(2) << state.start_minute;
+	string time_text = time_stream.str();
+	outtextxy(1015, 172, time_text.c_str());
+
+	rectangle(1110, 165, 1160, 200);
+	outtextxy(1127, 172, "+5");
+
+	outtextxy(920, 230, "路线策略");
+
+	if (state.k == 0)
+		setfillcolor(RGB(210, 232, 250));
+	else
+		setfillcolor(RGB(245, 247, 250));
+
+	solidrectangle(930, 260, 1045, 295);
+	setlinecolor(RGB(120, 140, 160));
+	rectangle(930, 260, 1045, 295);
+	outtextxy(943, 267, "时间最短");
+
+	if (state.k == 8)
+		setfillcolor(RGB(210, 232, 250));
+	else
+		setfillcolor(RGB(245, 247, 250));
+
+	solidrectangle(1055, 260, 1170, 295);
+	rectangle(1055, 260, 1170, 295);
+	outtextxy(1068, 267, "经济优先");
+
+	outtextxy(920, 325, "允许骑行");
+
+	setlinecolor(RGB(120, 140, 160));
+	rectangle(1030, 325, 1050, 345);
+
+	if (state.allow_bike) {
+		setfillcolor(RGB(47, 191, 113));
+		solidrectangle(1034, 329, 1046, 341);
+	}
+
+	setfillcolor(RGB(35, 105, 165));
+	solidrectangle(930, 380, 1045, 420);
+	settextcolor(RGB(255, 255, 255));
+	outtextxy(947, 390, "开始规划");
+
+	setfillcolor(RGB(230, 235, 240));
+	solidrectangle(1055, 380, 1170, 420);
+	setlinecolor(RGB(150, 160, 170));
+	rectangle(1055, 380, 1170, 420);
+	settextcolor(RGB(35, 45, 60));
+	outtextxy(1090, 390, "重置");
+
+	outtextxy(920, 450, "当前状态：");
+	outtextxy(920, 480, state.message.c_str());
+}
+
+/***************************************************************************
+  函数名称：draw_route_result
+  功    能：在右侧面板绘制当前规划路线的时间、费用、到达时间和简要路线指南
+  输入参数：const vertex vertices[]：顶点数组
+  const transit_line lines[]：线路数组
+  int line_number：线路数量
+  const ui_state& state：当前EasyX界面状态
+  返 回 值：无
+  说    明：第一版最多绘制三段路线指南，过长路线后续再加入分页或自动换行
+***************************************************************************/
+void draw_route_result(const vertex vertices[],
+	const transit_line lines[], int line_number,
+	const ui_state& state)
+{
+	if (!state.route_ready)
+		return;
+
+	settextcolor(RGB(35, 45, 60));
+	settextstyle(16, 0, "微软雅黑");
+
+	stringstream result_stream;
+
+	result_stream << "总时间：" << state.total_time_cost << "分钟";
+	string result_text = result_stream.str();
+	outtextxy(920, 520, result_text.c_str());
+
+	result_stream.str("");
+	result_stream.clear();
+
+	result_stream << fixed << setprecision(2)
+		<< "总费用：" << state.total_fare_cost << "元";
+	result_text = result_stream.str();
+	outtextxy(920, 545, result_text.c_str());
+
+	result_stream.str("");
+	result_stream.clear();
+
+	result_stream << "预计到达："
+		<< setw(2) << setfill('0') << state.arrival_hour
+		<< ":" << setw(2) << state.arrival_minute;
+
+	if (state.days_passed > 0)
+		result_stream << " +" << state.days_passed << "天";
+
+	result_text = result_stream.str();
+	outtextxy(920, 570, result_text.c_str());
+
+	int guide_number = 1;
+	int y = 600;
+
+	for (int i = state.path_vertex_number - 1;
+		i > 0 && guide_number <= 3; i--) {
+
+		int from_vertex = state.path[i];
+		int to_vertex = state.path[i - 1];
+
+		const edge_node* current_edge = state.previous_edge[to_vertex];
+
+		if (!current_edge)
+			continue;
+
+		string way_text;
+
+		if (current_edge->type == edge_type::TRANSFER) {
+			if (get_effective_time_cost(*current_edge,
+				state.allow_bike) < current_edge->time_cost)
+				way_text = "骑行";
+			else
+				way_text = "步行";
+		}
+		else if (current_edge->line_id >= 0
+			&& current_edge->line_id < line_number) {
+
+			way_text = lines[current_edge->line_id].name;
+		}
+
+		result_stream.str("");
+		result_stream.clear();
+
+		result_stream << guide_number << ". "
+			<< way_text << " -> "
+			<< vertices[to_vertex].name;
+
+		result_text = result_stream.str();
+
+		outtextxy(920, y, result_text.c_str());
+
+		y += 25;
+		guide_number++;
+	}
+
+	if (state.path_vertex_number - 1 > 3)
+		outtextxy(920, y, "...");
+}
+
+
+/***************************************************************************
+  函数名称：draw_easyx_interface
+  功    能：按照固定图层顺序完整刷新EasyX界面
+  输入参数：const vertex vertices[]：顶点数组
+  int vertex_number：顶点数量
+  const transit_line lines[]：线路数组
+  int line_number：线路数量
+  const ui_state& state：当前EasyX界面状态
+  返 回 值：无
+  说    明：绘制顺序为背景、普通边、推荐路线、普通站点、起终点标记、右侧控制面板和结果
+***************************************************************************/
+void draw_easyx_interface(const vertex vertices[], int vertex_number,
+	const transit_line lines[], int line_number,
+	const ui_state& state)
+{
+	setbkcolor(RGB(247, 250, 252));
+	cleardevice();
+
+	draw_all_edges(vertices, vertex_number);
+
+	if (state.route_ready)
+		draw_route_highlight(vertices, state);
+
+	draw_all_vertices(vertices, vertex_number);
+	draw_selected_vertices(vertices, vertex_number, state);
+
+	setlinecolor(RGB(190, 200, 210));
+	setlinestyle(PS_SOLID, 1);
+	line(900, 0, 900, 700);
+
+	draw_control_panel(vertices, vertex_number, state);
+
+	if (state.route_ready)
+		draw_route_result(vertices, lines, line_number, state);
+
+	FlushBatchDraw();
+}
+
+/***************************************************************************
+  函数名称：reset_ui_state
+  功    能：把EasyX界面状态恢复到程序启动时的默认状态
+  输入参数：ui_state& state：需要重置的界面状态
+  返 回 值：无
+  说    明：数组中的旧数据无需逐项清零，只要路径长度归零且route_ready为false即可视为无效
+***************************************************************************/
+void reset_ui_state(ui_state& state)
+{
+	state.start_vertex = -1;
+	state.end_vertex = -1;
+
+	state.k = 0;
+	state.allow_bike = false;
+
+	state.start_hour = 8;
+	state.start_minute = 30;
+
+	state.path_vertex_number = 0;
+
+	state.total_time_cost = 0;
+	state.total_fare_cost = 0;
+
+	state.arrival_hour = 0;
+	state.arrival_minute = 0;
+	state.days_passed = 0;
+
+	state.route_ready = false;
+	state.message = "请选择起点";
+}
+
+/***************************************************************************
+  函数名称：calculate_route_for_ui
+  功    能：根据当前ui_state中的起终点和策略调用已有算法完成一次路线规划
+  输入参数：vertex vertices[]：顶点数组
+  int vertex_number：顶点数量
+  ui_state& state：当前EasyX界面状态，规划结果写回其中
+  返 回 值：路线规划成功返回true，失败返回false
+  说    明：内部严格按照dijkstra、build_paths、calculate_path_statistics、
+  calculate_arrival_time的顺序调用原有算法，界面层不重新实现寻路算法
+***************************************************************************/
+bool calculate_route_for_ui(vertex vertices[], int vertex_number,
+	ui_state& state)
+{
+	state.route_ready = false;
+	state.path_vertex_number = 0;
+	state.total_time_cost = 0;
+	state.total_fare_cost = 0;
+
+	if (!is_valid_vertex_id(state.start_vertex, vertex_number)
+		|| !is_valid_vertex_id(state.end_vertex, vertex_number)) {
+
+		state.message = "请先选择起点和终点";
+		return false;
+	}
+
+	if (state.start_vertex == state.end_vertex) {
+		state.message = "起点和终点不能相同";
+		return false;
+	}
+
+	if (!dijkstra(vertices, vertex_number,
+		state.start_vertex, state.k,
+		state.distance, state.previous_vertex,
+		state.previous_edge,
+		state.allow_bike)) {
+		state.message = "Dijkstra计算失败";
+		return false;
+	}
+
+	if (!build_paths(state.previous_vertex, vertex_number,
+		state.start_vertex, state.end_vertex,
+		state.path, state.path_vertex_number)) {
+
+		state.message = "当前起终点之间没有可用路线";
+		return false;
+	}
+
+	if (!calculate_path_statistics(
+		state.path, state.path_vertex_number,
+		state.previous_edge,
+		state.total_time_cost,
+		state.total_fare_cost,
+		state.allow_bike)) {
+
+		state.message = "路线统计失败";
+		return false;
+	}
+
+	if (!calculate_arrival_time(
+		state.start_hour,
+		state.start_minute,
+		state.total_time_cost,
+		state.arrival_hour,
+		state.arrival_minute,
+		state.days_passed)) {
+
+		state.message = "到达时间计算失败";
+		return false;
+	}
+
+	state.route_ready = true;
+	state.message = "路线规划完成";
+
+	return true;
+}
+
+
+/***************************************************************************
+  函数名称：handle_left_click
+  功    能：处理一次鼠标左键点击，根据点击位置修改站点选择、时间、策略、骑行或规划状态
+  输入参数：int mouse_x：鼠标点击位置的x坐标
+  int mouse_y：鼠标点击位置的y坐标
+  vertex vertices[]：顶点数组
+  int vertex_number：顶点数量
+  ui_state& state：当前EasyX界面状态
+  返 回 值：无
+  说    明：左侧x<900区域用于选择站点；右侧区域按照固定矩形坐标判断不同控件
+***************************************************************************/
+void handle_left_click(int mouse_x, int mouse_y,
+	vertex vertices[], int vertex_number,
+	ui_state& state)
+{
+	if (mouse_x < 900) {
+		int clicked_vertex =
+			find_clicked_vertex(vertices, vertex_number,
+				mouse_x, mouse_y);
+
+		if (clicked_vertex == -1)
+			return;
+
+		if (state.start_vertex == -1) {
+			state.start_vertex = clicked_vertex;
+			state.end_vertex = -1;
+			state.route_ready = false;
+			state.path_vertex_number = 0;
+			state.message = "请选择终点";
+		}
+		else {
+			if (clicked_vertex == state.start_vertex) {
+				state.message = "终点不能与起点相同";
+				return;
+			}
+
+			state.end_vertex = clicked_vertex;
+			state.route_ready = false;
+			state.path_vertex_number = 0;
+			state.message = "起终点已选择，请开始规划";
+		}
+
+		return;
+	}
+
+	if (is_point_in_rectangle(mouse_x, mouse_y,
+		930, 165, 980, 200)) {
+
+		int total_minutes =
+			state.start_hour * 60 + state.start_minute;
+
+		total_minutes -= 5;
+
+		if (total_minutes < 0)
+			total_minutes += 24 * 60;
+
+		state.start_hour = total_minutes / 60;
+		state.start_minute = total_minutes % 60;
+
+		state.route_ready = false;
+	}
+
+	else if (is_point_in_rectangle(mouse_x, mouse_y,
+		1110, 165, 1160, 200)) {
+
+		int total_minutes =
+			state.start_hour * 60 + state.start_minute;
+
+		total_minutes = (total_minutes + 5) % (24 * 60);
+
+		state.start_hour = total_minutes / 60;
+		state.start_minute = total_minutes % 60;
+
+		state.route_ready = false;
+	}
+
+	else if (is_point_in_rectangle(mouse_x, mouse_y,
+		930, 260, 1045, 295)) {
+
+		state.k = 0;
+		state.route_ready = false;
+		state.message = "已选择时间最短策略";
+	}
+
+	else if (is_point_in_rectangle(mouse_x, mouse_y,
+		1055, 260, 1170, 295)) {
+
+		state.k = 8;
+		state.route_ready = false;
+		state.message = "已选择经济优先策略";
+	}
+
+	else if (is_point_in_rectangle(mouse_x, mouse_y,
+		1030, 325, 1050, 345)) {
+
+		state.allow_bike = !state.allow_bike;
+		state.route_ready = false;
+
+		if (state.allow_bike)
+			state.message = "已允许骑行接驳";
+		else
+			state.message = "已关闭骑行接驳";
+	}
+
+	else if (is_point_in_rectangle(mouse_x, mouse_y,
+		930, 380, 1045, 420)) {
+
+		calculate_route_for_ui(vertices, vertex_number, state);
+	}
+
+	else if (is_point_in_rectangle(mouse_x, mouse_y,
+		1055, 380, 1170, 420)) {
+
+		reset_ui_state(state);
+	}
+}
+
+/***************************************************************************
+  函数名称：run_easyx_interface
+  功    能：运行EasyX主界面消息循环，持续接收鼠标和键盘消息并根据状态重新绘制界面
+  输入参数：vertex vertices[]：顶点数组
+  int vertex_number：顶点数量
+  const transit_line lines[]：线路数组
+  int line_number：线路数量
+  ui_state& state：当前EasyX界面状态
+  返 回 值：无
+  说    明：鼠标左键触发handle_left_click后重新绘制；按ESC或关闭窗口结束循环
+***************************************************************************/
+void run_easyx_interface(vertex vertices[], int vertex_number,
+	const transit_line lines[], int line_number,
+	ui_state& state)
+{
+	BeginBatchDraw();
+
+	draw_easyx_interface(vertices, vertex_number,
+		lines, line_number, state);
+
+	while (true) {
+		ExMessage message =
+			getmessage(EX_MOUSE | EX_KEY | EX_WINDOW);
+
+		if (message.message == WM_CLOSE)
+			break;
+
+		if (message.message == WM_KEYDOWN
+			&& message.vkcode == VK_ESCAPE)
+			break;
+
+		if (message.message == WM_LBUTTONDOWN) {
+
+			handle_left_click(message.x, message.y,
+				vertices, vertex_number, state);
+
+			draw_easyx_interface(vertices, vertex_number,
+				lines, line_number, state);
+		}
+	}
+
+	EndBatchDraw();
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 /***************************************************************************
   函数名称：
@@ -1104,71 +1881,7 @@ int main()
 		output_one_step_vertex(vertices[i]);
 #endif
 
-	int start_vertex = 0;
-	int k = 0;
-	double distance[max_vertices];
-	int previous_vertex[max_vertices];
-
-	int total_time_cost = 0;
-	bool allow_bike = false;
-	int end_vertex = 2;
-	int path_vertex_number = 0;
-	int path[max_vertices];
-
-	int start_hour = 8;
-	int start_minute = 30;
-	int arrival_hour = 0;
-	int arrival_minute = 0;
-	int days_passed = 0;
-
-	double total_fare_cost = 0;
-
-	if (dijkstra(vertices, vertex_number, start_vertex, k, distance, previous_vertex, allow_bike)) {
-		if (build_paths(previous_vertex, vertex_number, start_vertex, end_vertex, path, path_vertex_number)) {
-			if (calculate_path_statistics(vertices, path, path_vertex_number, total_time_cost, total_fare_cost, allow_bike)) {
-				int intermediate_station_number = 0;
-				if (path_vertex_number > 2)
-					intermediate_station_number = path_vertex_number - 2;
-				cout << "经停站数：" << intermediate_station_number << "站" << endl;
-				output_route_guide(vertices, path, path_vertex_number, allow_bike, lines,line_number);
-#if test_dijkstra
-				output_dijkstra_arrays("最终寻路结果：", distance, previous_vertex, vertex_number);
-#endif 
-				cout << "总时间为：" << total_time_cost << "分钟" << endl
-					<< "总费用为：" << total_fare_cost << "元" << endl;
-				if (calculate_arrival_time(start_hour, start_minute, total_time_cost, arrival_hour, arrival_minute, days_passed)) {
-					cout << "出发时间：" << setw(2) << setfill('0') << start_hour << ":" <<
-						setw(2) << start_minute << endl << "预计到达：";//HH:MM格式，右对齐两字符并填充0
-					switch (days_passed) {
-						case 0://绝大多数情况：同一天到达
-							break;
-						case 1:
-							cout << "次日 ";
-							break;
-						default://至少T+2，输出N天后
-							cout << days_passed << "天后 ";
-							break;
-					}
-					cout << setw(2) << arrival_hour << ":" << setw(2) << arrival_minute << setfill(' ') << endl;//setfill默认持续生效
-				}	
-				else
-					cout << "出发时间不合法" << endl;
-			}
-			else
-				cout << "路线数据不完整，无法生成统计" << endl;
-		}
-		else
-			cout << "起点与终点之间无可用路线" << endl;	
-	}
-	else
-		cout << "寻路计算失败，请检查输入参数" << endl;
-	
-
-	
-
-	
-		
-
+	initgraph(1200, 700, EX_SHOWCONSOLE);
 
 #if test_min_heap
 	min_heap test;
@@ -1199,10 +1912,13 @@ int main()
 	cout << calculate_weight(cal, 0) << endl << calculate_weight(cal, 8) << endl;
 #endif
 	
+	
+	ui_state state;
+	run_easyx_interface(vertices, vertex_number, lines, line_number, state);
+
 	for (int i = 0; i < vertex_number; i++)
 		release_edges(vertices[i]);
-
-	
+	closegraph();
 
 	return 0;
 }
