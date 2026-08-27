@@ -1,4 +1,4 @@
-#include <iostream>
+ï»¿#include <iostream>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -9,57 +9,66 @@
 #include <graphics.h>
 using namespace std;
 
-#define test_csv_lines 0 //ÎÄ¼ş´ò¿ª¡¢±íÍ·¡¢ÕûĞĞºÍÈı¸ö×Ö¶Î½âÎö
-#define test_transit_lines 0 //ÏßÂ·Ìí¼Ó¡¢ÀàĞÍÏŞÖÆ¡¢±àºÅÁ¬ĞøĞÔ 
-#define test_adjacency_list	 0 //¶¥µã¡¢Í·²å·¨¡¢ÎŞÏò±ß¡¢±éÀú¡¢ÊÍ·Å
-#define test_min_heap 0 //³õÊ¼»¯¡¢½»»»¡¢ÉÏ¸¡¡¢À©Èİ¡¢ÏÂ³Á¡¢µ¯³ö¡¢¿Õ¶Ñ¡¢ÊÍ·Å
-#define test_weight 0 //Ê±¼ä¡¢¾­¼ÃÈ¨ÖµºÍÆïĞĞÓĞĞ§Ê±¼ä
-#define test_dijkstra 0 //ËÉ³Ú¡¢Ç°Çı¡¢ÖØ¸´Èë¶ÑºÍ¾É¶Ñ½ÚµãÌø¹ı
+#define test_csv_lines 0 //æ–‡ä»¶æ‰“å¼€ã€è¡¨å¤´ã€æ•´è¡Œå’Œä¸‰ä¸ªå­—æ®µè§£æ
+#define test_transit_lines 0 //çº¿è·¯æ·»åŠ ã€ç±»å‹é™åˆ¶ã€ç¼–å·è¿ç»­æ€§ 
+#define test_adjacency_list	 0 //é¡¶ç‚¹ã€å¤´æ’æ³•ã€æ— å‘è¾¹ã€éå†ã€é‡Šæ”¾
+#define test_min_heap 0 //åˆå§‹åŒ–ã€äº¤æ¢ã€ä¸Šæµ®ã€æ‰©å®¹ã€ä¸‹æ²‰ã€å¼¹å‡ºã€ç©ºå †ã€é‡Šæ”¾
+#define test_weight 0 //æ—¶é—´ã€ç»æµæƒå€¼å’Œéª‘è¡Œæœ‰æ•ˆæ—¶é—´
+#define test_dijkstra 0 //æ¾å¼›ã€å‰é©±ã€é‡å¤å…¥å †å’Œæ—§å †èŠ‚ç‚¹è·³è¿‡
 
-const int max_vertices = 150; //×î¶à150¸ö¶¥µã
-const int physical_vertex_number = 92; //Ç°92¸öÎªEasyX¿É¼û¡¢¿Éµã»÷µÄÕæÊµÎïÀí½Úµã
-const int max_lines = 50;//ÏßÂ·×î¶à50Ìõ
+const int max_vertices = 150; //æœ€å¤š150ä¸ªé¡¶ç‚¹
+const int physical_vertex_number = 92; //å‰92ä¸ªä¸ºEasyXå¯è§ã€å¯ç‚¹å‡»çš„çœŸå®ç‰©ç†èŠ‚ç‚¹
+const int max_lines = 50;//çº¿è·¯æœ€å¤š50æ¡
 
-enum class edge_type { METRO, BUS, TRANSFER };//±ßÀàĞÍ£ºµØÌú£¬¹«½»£¬»»³Ë
-enum class station_type{METRO, BUS};//Õ¾µãÀàĞÍ:µØÌú£¬¹«½»
+enum class edge_type { METRO, BUS, TRANSFER };//è¾¹ç±»å‹ï¼šåœ°é“ï¼Œå…¬äº¤ï¼Œæ¢ä¹˜
+enum class station_type{METRO, BUS};//ç«™ç‚¹ç±»å‹:åœ°é“ï¼Œå…¬äº¤
 
-//±ß½á¹¹Ìå£¬E
+//è¾¹ç»“æ„ä½“ï¼ŒE
 struct edge_node {
-	int to = INT_MAX;//Ä¿±ê¶¥µã±àºÅ
-	int time_cost = INT_MAX;//ÕâÌõ±ß¼ÇÂ¼µÄºÄÊ±
-	double fare_cost = std::numeric_limits<double>::infinity();//·ÑÓÃ
-	edge_type type = edge_type::METRO;//±ßµÄÀàĞÍ£¬Ä¬ÈÏÎªµØÌú
-	int line_id = -1; //²½ĞĞ(ÆïĞĞ)Ä¬ÈÏ-1£¬ÓÉÓÚÓĞ¶àÌõµØÌúºÍ¹«½»£¬¸Ã×Ö¶ÎÁªºÏtype¿ÉÈ·¶¨¾ßÌåÊÇÄÄÒ»ÌõÏßÂ·
-	int bike_time_cost = -1;//µØÌúºÍ¹«½»Ä¬ÈÏ-1£¬»»³ËÇé¿öÈô¿ÉÆïĞĞÔò¸ÄÎª¶ÔÓ¦ÆïĞĞÊ±¼ä
-	edge_node* next = nullptr;//Ö¸ÏòÍ¬Ò»ÁÚ½ÓÁ´±íÖĞµÄÏÂÒ»¸ö±ß½áµã
+	int to = INT_MAX;//ç›®æ ‡é¡¶ç‚¹ç¼–å·
+	int time_cost = INT_MAX;//è¿™æ¡è¾¹è®°å½•çš„è€—æ—¶
+	double fare_cost = std::numeric_limits<double>::infinity();//è´¹ç”¨
+	edge_type type = edge_type::METRO;//è¾¹çš„ç±»å‹ï¼Œé»˜è®¤ä¸ºåœ°é“
+	int line_id = -1; //æ­¥è¡Œ(éª‘è¡Œ)é»˜è®¤-1ï¼Œç”±äºæœ‰å¤šæ¡åœ°é“å’Œå…¬äº¤ï¼Œè¯¥å­—æ®µè”åˆtypeå¯ç¡®å®šå…·ä½“æ˜¯å“ªä¸€æ¡çº¿è·¯
+	int bike_time_cost = -1;//åœ°é“å’Œå…¬äº¤é»˜è®¤-1ï¼Œæ¢ä¹˜æƒ…å†µè‹¥å¯éª‘è¡Œåˆ™æ”¹ä¸ºå¯¹åº”éª‘è¡Œæ—¶é—´
+	edge_node* next = nullptr;//æŒ‡å‘åŒä¸€é‚»æ¥é“¾è¡¨ä¸­çš„ä¸‹ä¸€ä¸ªè¾¹ç»“ç‚¹
 };
-//¶¥µã½á¹¹Ìå£¬V
+//é¡¶ç‚¹ç»“æ„ä½“ï¼ŒV
 struct vertex {
-	int id = INT_MAX;//Õ¾µã±àºÅ
-	string name = "";//Õ¾µãÃû³Æ
-	station_type type = station_type::METRO;//Õ¾µãÀàĞÍ£¬Ä¬ÈÏÎªµØÌú
-	edge_node* first_edge = nullptr;//ÁÚ½ÓÁ´±íµÄµÚÒ»¸ö±ß½ÚµãµØÖ·
-	int x;//EasyXĞèÒªµÄÕ¾µãÔ²ĞÄx×ø±ê
-	int y;//EasyXĞèÒªµÄÕ¾µãÔ²ĞÄy×ø±ê
+	int id = INT_MAX;//ç«™ç‚¹ç¼–å·
+	string name = "";//ç«™ç‚¹åç§°
+	station_type type = station_type::METRO;//ç«™ç‚¹ç±»å‹ï¼Œé»˜è®¤ä¸ºåœ°é“
+	edge_node* first_edge = nullptr;//é‚»æ¥é“¾è¡¨çš„ç¬¬ä¸€ä¸ªè¾¹èŠ‚ç‚¹åœ°å€
+	int x;//EasyXéœ€è¦çš„ç«™ç‚¹åœ†å¿ƒxåæ ‡
+	int y;//EasyXéœ€è¦çš„ç«™ç‚¹åœ†å¿ƒyåæ ‡
 };
-//ºòÑ¡¶¥µã¼°Æä¾àÀë½á¹¹Ìå
+//å€™é€‰é¡¶ç‚¹åŠå…¶è·ç¦»ç»“æ„ä½“
 struct heap_node {
-	int vertex_id;//¶¥µã±àºÅ
-	double distance;//µ±Ç°¾àÀë
+	int vertex_id;//é¡¶ç‚¹ç¼–å·
+	double distance;//å½“å‰è·ç¦»
 };
-//×îĞ¡¶Ñ
+//æœ€å°å †
 struct min_heap {
-	heap_node* data = nullptr;//µ±Ç°Ö¸ÏòÔªËØÎ»ÖÃ
-	int size = 0;//µ±Ç°Êµ¼Ê´æÓĞµÄ¶ÑÔªËØÊıÁ¿£¬ÓÃÀ´¿ØÖÆÏÂ±êĞ¡ÓÚsize·ÀÖ¹¶ÁÈ¡Ê±Ô½½ç
-	int capacity = 0;//µ±Ç°Êı×é×î¶àÄÜÈİÄÉ¶àÉÙ¸öÔªËØ£¬Ó¦¸ÃÊ¼ÖÕÂú×ã0¡Üsize¡Ücapacity
+	heap_node* data = nullptr;//å½“å‰æŒ‡å‘å…ƒç´ ä½ç½®
+	int size = 0;//å½“å‰å®é™…å­˜æœ‰çš„å †å…ƒç´ æ•°é‡ï¼Œç”¨æ¥æ§åˆ¶ä¸‹æ ‡å°äºsizeé˜²æ­¢è¯»å–æ—¶è¶Šç•Œ
+	int capacity = 0;//å½“å‰æ•°ç»„æœ€å¤šèƒ½å®¹çº³å¤šå°‘ä¸ªå…ƒç´ ï¼Œåº”è¯¥å§‹ç»ˆæ»¡è¶³0â‰¤sizeâ‰¤capacity
 };
-//ÏßÂ·±í
+//çº¿è·¯è¡¨
 struct transit_line {
-	int id = -1;//ÏßÂ·±àºÅ£¬µÈÓÚÏßÂ·ÔÚÊı×éÀïµÄÏÂ±ê
-	string name = "";//ÏßÂ·ÖĞÎÄÃû³Æ
-	edge_type type= edge_type::METRO;//ÏßÂ·ÀàĞÍ£¬Ä¬ÈÏÎªµØÌú£¬Ö»ÔÊĞíÊÇµØÌú/¹«½»ÀàĞÍ²»ÔÊĞíÎª»»³Ë
+	int id = -1;//çº¿è·¯ç¼–å·ï¼Œç­‰äºçº¿è·¯åœ¨æ•°ç»„é‡Œçš„ä¸‹æ ‡
+	string name = "";//çº¿è·¯ä¸­æ–‡åç§°
+	edge_type type= edge_type::METRO;//çº¿è·¯ç±»å‹ï¼Œé»˜è®¤ä¸ºåœ°é“ï¼Œåªå…è®¸æ˜¯åœ°é“/å…¬äº¤ç±»å‹ä¸å…è®¸ä¸ºæ¢ä¹˜
 };
-//EasyX½çÃæ×´Ì¬
+//å˜‰å®šéƒ¨åˆ†
+struct jiading_map_node {
+	int vertex_id = -1;       //åŸå›¾ä¸­çš„ç‰©ç†é¡¶ç‚¹ç¼–å·
+	int x = 0;                //å˜‰å®šå±€éƒ¨å›¾ä¸­çš„åœ†å¿ƒx
+	int y = 0;                //å˜‰å®šå±€éƒ¨å›¾ä¸­çš„åœ†å¿ƒy
+	int label_x = 0;          //æ ‡ç­¾å·¦ä¸Šè§’x
+	int label_y = 0;          //æ ‡ç­¾å·¦ä¸Šè§’y
+	string short_name = "";   //å±€éƒ¨å›¾æ˜¾ç¤ºçš„çŸ­åç§°
+};
+//EasyXç•Œé¢çŠ¶æ€
 struct ui_state {
 	int start_vertex = -1;
 	int end_vertex = -1;
@@ -82,17 +91,18 @@ struct ui_state {
 	int days_passed = 0;
 
 	bool route_ready = false;
-	string message = "ÇëÑ¡ÔñÆğµã";
+	string message = "è¯·é€‰æ‹©èµ·ç‚¹";
+	bool is_jiading_campus = false;
 };
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºadd_transit_line
-  ¹¦    ÄÜ£ºÌí¼ÓÒ»ÌõÏßÂ·
-  ÊäÈë²ÎÊı£ºtransit_line lines[]£ºÏßÂ·Êı×é
-  int& line_number£ºµ±Ç°ÏßÂ·ÊıÁ¿
-  string line_name£º¼ÓÈëµÄÏßÂ·Ãû³Æ
-  edge_type line_type£º¼ÓÈëµÄÏßÂ·ÀàĞÍ£¨¹«½»/µØÌú£©
-  ·µ »Ø Öµ£ºtrue´ú±í¼ÓÈë³É¹¦£¬false´ú±í¼ÓÈëÊ§°Ü
-  Ëµ    Ã÷£ºµ±Ç°ÏßÂ·ÊıÁ¿ĞèÒª×ÔÔö£¬ËùÒÔ´«µİÒıÓÃĞÎÊ½
+  å‡½æ•°åç§°ï¼šadd_transit_line
+  åŠŸ    èƒ½ï¼šæ·»åŠ ä¸€æ¡çº¿è·¯
+  è¾“å…¥å‚æ•°ï¼štransit_line lines[]ï¼šçº¿è·¯æ•°ç»„
+  int& line_numberï¼šå½“å‰çº¿è·¯æ•°é‡
+  string line_nameï¼šåŠ å…¥çš„çº¿è·¯åç§°
+  edge_type line_typeï¼šåŠ å…¥çš„çº¿è·¯ç±»å‹ï¼ˆå…¬äº¤/åœ°é“ï¼‰
+  è¿” å› å€¼ï¼štrueä»£è¡¨åŠ å…¥æˆåŠŸï¼Œfalseä»£è¡¨åŠ å…¥å¤±è´¥
+  è¯´    æ˜ï¼šå½“å‰çº¿è·¯æ•°é‡éœ€è¦è‡ªå¢ï¼Œæ‰€ä»¥ä¼ é€’å¼•ç”¨å½¢å¼
 ***************************************************************************/
 bool add_transit_line(transit_line lines[], int& line_number, string line_name, edge_type line_type)
 {
@@ -100,7 +110,7 @@ bool add_transit_line(transit_line lines[], int& line_number, string line_name, 
 		return false;
 	if (line_type != edge_type::METRO && line_type != edge_type::BUS)
 		return false;
-	lines[line_number].id = line_number;//Ìí¼ÓÇ°linesÀïÓĞ0..line_number-1ÏßÂ·£¬ÏÖÔÚÔÚline_numberÎ»ÖÃÌí¼Ó±äÎª0..line_number
+	lines[line_number].id = line_number;//æ·»åŠ å‰linesé‡Œæœ‰0..line_number-1çº¿è·¯ï¼Œç°åœ¨åœ¨line_numberä½ç½®æ·»åŠ å˜ä¸º0..line_number
 	lines[line_number].name = line_name;
 	lines[line_number].type = line_type;
 	line_number++;
@@ -108,48 +118,48 @@ bool add_transit_line(transit_line lines[], int& line_number, string line_name, 
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºload_transit_lines
-  ¹¦    ÄÜ£º´ÓÖ¸¶¨CSVÎÄ¼ş¶ÁÈ¡È«²¿ÏßÂ·Êı¾İ£¬²¢´æÈëÏßÂ·Êı×é£»ÒÀ´ÎĞ£Ñé±íÍ·¡¢×Ö¶Î¡¢±àºÅÁ¬ĞøĞÔºÍÏßÂ·ÀàĞÍ
-  ÊäÈë²ÎÊı£ºconst string& file_path£ºÒª¶ÁÈ¡µÄÏßÂ·CSVÎÄ¼şÂ·¾¶
-  transit_line lines[]£º´æ·Å¶ÁÈ¡½á¹ûµÄÏßÂ·Êı×é£»
-  int& line_number£º¼ÇÂ¼³É¹¦¼ÓÈëµÄÏßÂ·ÊıÁ¿
-  ·µ »Ø Öµ£ºtrue´ú±í¶ÁÈ¡³É¹¦£¬false´ú±í¶ÁÈ¡Ê§°Ü
-  Ëµ    Ã÷£ºconst string&±ÜÃâÎŞÒâÒå¸´ÖÆ£»line_numberĞèÒªĞŞ¸ÄËùÒÔÓÃÒıÓÃ
+  å‡½æ•°åç§°ï¼šload_transit_lines
+  åŠŸ    èƒ½ï¼šä»æŒ‡å®šCSVæ–‡ä»¶è¯»å–å…¨éƒ¨çº¿è·¯æ•°æ®ï¼Œå¹¶å­˜å…¥çº¿è·¯æ•°ç»„ï¼›ä¾æ¬¡æ ¡éªŒè¡¨å¤´ã€å­—æ®µã€ç¼–å·è¿ç»­æ€§å’Œçº¿è·¯ç±»å‹
+  è¾“å…¥å‚æ•°ï¼šconst string& file_pathï¼šè¦è¯»å–çš„çº¿è·¯CSVæ–‡ä»¶è·¯å¾„
+  transit_line lines[]ï¼šå­˜æ”¾è¯»å–ç»“æœçš„çº¿è·¯æ•°ç»„ï¼›
+  int& line_numberï¼šè®°å½•æˆåŠŸåŠ å…¥çš„çº¿è·¯æ•°é‡
+  è¿” å› å€¼ï¼štrueä»£è¡¨è¯»å–æˆåŠŸï¼Œfalseä»£è¡¨è¯»å–å¤±è´¥
+  è¯´    æ˜ï¼šconst string&é¿å…æ— æ„ä¹‰å¤åˆ¶ï¼›line_numberéœ€è¦ä¿®æ”¹æ‰€ä»¥ç”¨å¼•ç”¨
 ***************************************************************************/
 bool load_transit_lines(const string& file_path, transit_line lines[], int &line_number)
 {
 	ifstream lines_file(file_path);
 	if (!lines_file.is_open()) {
-		cout << "ÏßÂ·CSVÎÄ¼şÎŞ·¨´ò¿ª£¬ÎŞ·¨½øĞĞºóĞø¼ÆËã" << endl;
+		cout << "çº¿è·¯CSVæ–‡ä»¶æ— æ³•æ‰“å¼€ï¼Œæ— æ³•è¿›è¡Œåç»­è®¡ç®—" << endl;
 		return false;
 	}
 	string header;
-	if (!getline(lines_file, header)) {//°Ñlines_fileµÚÒ»ĞĞÄÚÈİÄÃ³ö£¬·ÅÈëheaderÀï£¬µ±Ç°ÎÄ¼şÖ¸ÕëÎ»ÓÚµÚ¶şĞĞ¿ªÍ·
-		cout << "Ê×ĞĞĞÅÏ¢¶ÁÈ¡Ê§°Ü" << endl;
+	if (!getline(lines_file, header)) {//æŠŠlines_fileç¬¬ä¸€è¡Œå†…å®¹æ‹¿å‡ºï¼Œæ”¾å…¥headeré‡Œï¼Œå½“å‰æ–‡ä»¶æŒ‡é’ˆä½äºç¬¬äºŒè¡Œå¼€å¤´
+		cout << "é¦–è¡Œä¿¡æ¯è¯»å–å¤±è´¥" << endl;
 		return false;
 	}
 	if (header.substr(0, 3) == "\xEF\xBB\xBF")
-		header.erase(0, 3);//UTF8 BOM¸ñÊ½±êÊ¶·ûÊÇEF¡¢BB¡¢BF£¬Èç¹ûÊÇBOM¸ñÊ½È¥³ıÇ°×º£¬·ÇBOM¸ñÊ½µÄÕı³£CSVÔò»áÌø¹ı¸Ãif 
+		header.erase(0, 3);//UTF8 BOMæ ¼å¼æ ‡è¯†ç¬¦æ˜¯EFã€BBã€BFï¼Œå¦‚æœæ˜¯BOMæ ¼å¼å»é™¤å‰ç¼€ï¼ŒéBOMæ ¼å¼çš„æ­£å¸¸CSVåˆ™ä¼šè·³è¿‡è¯¥if 
 #if test_csv_lines
-	cout << "Ê×ĞĞheaderÎª£º" << header << endl;
+	cout << "é¦–è¡Œheaderä¸ºï¼š" << header << endl;
 #endif
 	if (header != "id,name,type") {
-		cout << "¸ÃÎÄ¼şÊ×ĞĞ²»ÊÇid,name,type£¬¿ÉÄÜ²»ÊÇÏßÂ·ÎÄ¼ş£¬Çë¼ì²édata/lines.csv ÄÚÈİ" << endl;
+		cout << "è¯¥æ–‡ä»¶é¦–è¡Œä¸æ˜¯id,name,typeï¼Œå¯èƒ½ä¸æ˜¯çº¿è·¯æ–‡ä»¶ï¼Œè¯·æ£€æŸ¥data/lines.csv å†…å®¹" << endl;
 		return false;
 	}
 
 	string data_line;
 	while (getline(lines_file, data_line)) {
 #if test_csv_lines
-		cout << "ÏßÂ·Êı¾İÎª£º" << data_line << endl;
+		cout << "çº¿è·¯æ•°æ®ä¸ºï¼š" << data_line << endl;
 #endif
 		string line_id_text;
 		string line_name_text;
 		string line_type_text;
 		stringstream line_stream(data_line);
 		if (!getline(line_stream, line_id_text, ',') || !getline(line_stream, line_name_text, ',')
-			|| !getline(line_stream, line_type_text, ',')) {//Öğ¸ö»ñÈ¡Èı¸ö×Ö¶Î£¬Ã¿´ÎÓöµ½,¾ÍÍ£Ö¹
-			cout << "ÏßÂ·Êı¾İ×Ö¶Î²»ÍêÕû" << endl;
+			|| !getline(line_stream, line_type_text, ',')) {//é€ä¸ªè·å–ä¸‰ä¸ªå­—æ®µï¼Œæ¯æ¬¡é‡åˆ°,å°±åœæ­¢
+			cout << "çº¿è·¯æ•°æ®å­—æ®µä¸å®Œæ•´" << endl;
 			return false;
 		}
 
@@ -157,12 +167,12 @@ bool load_transit_lines(const string& file_path, transit_line lines[], int &line
 		try {
 			line_id = stoi(line_id_text);
 		}
-		catch (const invalid_argument&) {//¼ì²é²ÎÊıÊÇ·ñºÏ·¨
-			cout << "ÏßÂ·±àºÅ²»ÊÇºÏ·¨ÕûÊı" << endl;
+		catch (const invalid_argument&) {//æ£€æŸ¥å‚æ•°æ˜¯å¦åˆæ³•
+			cout << "çº¿è·¯ç¼–å·ä¸æ˜¯åˆæ³•æ•´æ•°" << endl;
 			return false;
 		}
-		catch (const out_of_range&) {//¼ì²é²ÎÊıÊÇ·ñ³¬¹ıint·¶Î§
-			cout << "ÏßÂ·±àºÅ³¬·¶Î§" << endl;
+		catch (const out_of_range&) {//æ£€æŸ¥å‚æ•°æ˜¯å¦è¶…è¿‡intèŒƒå›´
+			cout << "çº¿è·¯ç¼–å·è¶…èŒƒå›´" << endl;
 			return false;
 		}
 		edge_type line_type;
@@ -171,54 +181,54 @@ bool load_transit_lines(const string& file_path, transit_line lines[], int &line
 		else if (line_type_text == "BUS")
 			line_type = edge_type::BUS;
 		else {
-			cout << "ÏßÂ·ÀàĞÍ¼È²»ÊÇµØÌúÒ²²»ÊÇ¹«½»£¬·Ç·¨" << endl;
+			cout << "çº¿è·¯ç±»å‹æ—¢ä¸æ˜¯åœ°é“ä¹Ÿä¸æ˜¯å…¬äº¤ï¼Œéæ³•" << endl;
 			return false;
 		}
 
 #if test_csv_lines
-		cout << "ÏßÂ·idÎª£º" << line_id << endl;
-		cout << "ÏßÂ·Ãû³ÆÎª£º" << line_name_text << endl;
-		cout << "ÏßÂ·ÀàĞÍÎª£º" << line_type_text << endl;
+		cout << "çº¿è·¯idä¸ºï¼š" << line_id << endl;
+		cout << "çº¿è·¯åç§°ä¸ºï¼š" << line_name_text << endl;
+		cout << "çº¿è·¯ç±»å‹ä¸ºï¼š" << line_type_text << endl;
 
 #endif	
 
-		if (line_number == line_id) {//Ğ£Ñéµ±Ç°ÏßÂ·±àºÅºÍCSVÎÄ¼şÀï¶Áµ½µÄÊÇ·ñÒ»ÖÂ
+		if (line_number == line_id) {//æ ¡éªŒå½“å‰çº¿è·¯ç¼–å·å’ŒCSVæ–‡ä»¶é‡Œè¯»åˆ°çš„æ˜¯å¦ä¸€è‡´
 			if (add_transit_line(lines, line_number, line_name_text, line_type)) {
 #if test_csv_lines
 				cout << lines[line_id].id << " " << lines[line_id].name << endl;
 #endif
 			}
 			else {
-				cout << "ÏßÂ·³õÊ¼»¯Ê§°Ü" << endl;
+				cout << "çº¿è·¯åˆå§‹åŒ–å¤±è´¥" << endl;
 				return false;
 			}
 		}
 		else {
-			cout << "ÏßÂ·±àºÅ²»Á¬Ğø»òË³Ğò´íÎó" << endl;
+			cout << "çº¿è·¯ç¼–å·ä¸è¿ç»­æˆ–é¡ºåºé”™è¯¯" << endl;
 			return false;
 		}
 	}
-	if (line_number == 0) {//Ö»ÓĞ±íÍ·Ã»ÓĞ¾ßÌåÏßÂ·
-		cout << "ÏßÂ·CSVÖĞÃ»ÓĞÓĞĞ§ÏßÂ·Êı¾İ" << endl;
+	if (line_number == 0) {//åªæœ‰è¡¨å¤´æ²¡æœ‰å…·ä½“çº¿è·¯
+		cout << "çº¿è·¯CSVä¸­æ²¡æœ‰æœ‰æ•ˆçº¿è·¯æ•°æ®" << endl;
 		return false;
 	}
-	lines_file.close();//¹ØÎÄ¼ş
+	lines_file.close();//å…³æ–‡ä»¶
 
 	return true;
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºadd_directed_edge
-  ¹¦    ÄÜ£ºÓÃÍ·²å·¨Ìí¼ÓÒ»Ìõ±ß£¬ÓÉÓÚÌí¼ÓµÄÊÇÓĞÏò±ß£¬ÔÚÎŞÏò±ßÇé¿öÏÂÁ½¸ö·½Ïò¸÷µ÷ÓÃÒ»´Î¸Ãº¯Êı
-  ÊäÈë²ÎÊı£ºvertex& from_vertex£ºÒªĞŞ¸ÄµÄ¶¥µã£¬
-	int to£ºÄ¿±ê¶¥µã±àºÅ£¬
-	int time_cost£ººÄÊ±£¬
-	double fare_cost£º·ÑÓÃ£¬
-	edge_type type£º±ßÀàĞÍ£¬
-	int line_id£º½ö¹«½»/µØÌúÊ±´ú±íÏßÂ·ºÅ£¬»»³Ë±ßÄ¬ÈÏ-1
-	int bike_time_cost£º½ö´æÔÚÆïĞĞÇÒtypeÎªtransferÊ±²Å¸³Öµ£¬ÆäÓàÊ±ºòÄ¬ÈÏ-1
-  ·µ »Ø Öµ£º¿Õ
-  Ëµ    Ã÷£ºĞŞ¸ÄÀ´Ô´¶¥µãµÄ first_edge£¬°ÑĞÂ±ß²åÈëÁÚ½ÓÁ´±í
+  å‡½æ•°åç§°ï¼šadd_directed_edge
+  åŠŸ    èƒ½ï¼šç”¨å¤´æ’æ³•æ·»åŠ ä¸€æ¡è¾¹ï¼Œç”±äºæ·»åŠ çš„æ˜¯æœ‰å‘è¾¹ï¼Œåœ¨æ— å‘è¾¹æƒ…å†µä¸‹ä¸¤ä¸ªæ–¹å‘å„è°ƒç”¨ä¸€æ¬¡è¯¥å‡½æ•°
+  è¾“å…¥å‚æ•°ï¼švertex& from_vertexï¼šè¦ä¿®æ”¹çš„é¡¶ç‚¹ï¼Œ
+	int toï¼šç›®æ ‡é¡¶ç‚¹ç¼–å·ï¼Œ
+	int time_costï¼šè€—æ—¶ï¼Œ
+	double fare_costï¼šè´¹ç”¨ï¼Œ
+	edge_type typeï¼šè¾¹ç±»å‹ï¼Œ
+	int line_idï¼šä»…å…¬äº¤/åœ°é“æ—¶ä»£è¡¨çº¿è·¯å·ï¼Œæ¢ä¹˜è¾¹é»˜è®¤-1
+	int bike_time_costï¼šä»…å­˜åœ¨éª‘è¡Œä¸”typeä¸ºtransferæ—¶æ‰èµ‹å€¼ï¼Œå…¶ä½™æ—¶å€™é»˜è®¤-1
+  è¿” å› å€¼ï¼šç©º
+  è¯´    æ˜ï¼šä¿®æ”¹æ¥æºé¡¶ç‚¹çš„ first_edgeï¼ŒæŠŠæ–°è¾¹æ’å…¥é‚»æ¥é“¾è¡¨
 ***************************************************************************/
 void add_directed_edge(vertex& from_vertex, int to, int time_cost, double fare_cost, edge_type type, int line_id = -1,int bike_time_cost = -1)
 {
@@ -237,11 +247,11 @@ void add_directed_edge(vertex& from_vertex, int to, int time_cost, double fare_c
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºadd_undirected_edge
-  ¹¦    ÄÜ£ºµ÷ÓÃÁ½´Îadd_directed_edgeÍê³ÉÁ½¸ö·½Ïò
-  ÊäÈë²ÎÊı£ºvertex& first_vertex, vertex& second_vertex£ºÁ½¸ö¶¥µã£¬ÆäÓàÎå¸ö²ÎÊıÁ½±ß¹²Ïí£¬º¬ÒåÍ¬add_directed_edgeº¯Êı
-  ·µ »Ø Öµ£º¿Õ
-  Ëµ    Ã÷£ºÌí¼ÓÎŞÏò±ß
+  å‡½æ•°åç§°ï¼šadd_undirected_edge
+  åŠŸ    èƒ½ï¼šè°ƒç”¨ä¸¤æ¬¡add_directed_edgeå®Œæˆä¸¤ä¸ªæ–¹å‘
+  è¾“å…¥å‚æ•°ï¼švertex& first_vertex, vertex& second_vertexï¼šä¸¤ä¸ªé¡¶ç‚¹ï¼Œå…¶ä½™äº”ä¸ªå‚æ•°ä¸¤è¾¹å…±äº«ï¼Œå«ä¹‰åŒadd_directed_edgeå‡½æ•°
+  è¿” å› å€¼ï¼šç©º
+  è¯´    æ˜ï¼šæ·»åŠ æ— å‘è¾¹
 ***************************************************************************/
 void add_undirected_edge(vertex& first_vertex, vertex& second_vertex, int time_cost, double fare_cost, edge_type type, int line_id = -1,int bike_time_cost = -1)
 {
@@ -250,11 +260,11 @@ void add_undirected_edge(vertex& first_vertex, vertex& second_vertex, int time_c
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºrelease_edges
-  ¹¦    ÄÜ£ºÊÍ·Åadd_edgeº¯Êı´´½¨µÄ¸÷¸öedge_node
-  ÊäÈë²ÎÊı£ºvertex& release_vertex£ºĞèÒªdeleteµÄÁÚ½Ó±íµÄ¶¥µã
-  ·µ »Ø Öµ£º¿Õ
-  Ëµ    Ã÷£º´Ó¶¥µãµÄfirst_edge¿ªÊ¼°´Ë³ĞòÊÍ·ÅÕû¸öÁ´±íµÄ¸÷¸önew³öÀ´µÄ½Úµã
+  å‡½æ•°åç§°ï¼šrelease_edges
+  åŠŸ    èƒ½ï¼šé‡Šæ”¾add_edgeå‡½æ•°åˆ›å»ºçš„å„ä¸ªedge_node
+  è¾“å…¥å‚æ•°ï¼švertex& release_vertexï¼šéœ€è¦deleteçš„é‚»æ¥è¡¨çš„é¡¶ç‚¹
+  è¿” å› å€¼ï¼šç©º
+  è¯´    æ˜ï¼šä»é¡¶ç‚¹çš„first_edgeå¼€å§‹æŒ‰é¡ºåºé‡Šæ”¾æ•´ä¸ªé“¾è¡¨çš„å„ä¸ªnewå‡ºæ¥çš„èŠ‚ç‚¹
 ***************************************************************************/
 void release_edges(vertex& release_vertex)
 {
@@ -266,18 +276,18 @@ void release_edges(vertex& release_vertex)
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºoutput_one_step_vertex
-  ¹¦    ÄÜ£ºÊä³ö´Óstart_station¿ªÊ¼ËùÓĞµÄÁÚ¾Ó
-  ÊäÈë²ÎÊı£ºstart_station£º¿ªÊ¼µÄ³µÕ¾
-  ·µ »Ø Öµ£º¿Õ
-  Ëµ    Ã÷£ºÒÀ´Î±éÀú¿ªÊ¼Õ¾µãµÄÁÚ½Ó±í
+  å‡½æ•°åç§°ï¼šoutput_one_step_vertex
+  åŠŸ    èƒ½ï¼šè¾“å‡ºä»start_stationå¼€å§‹æ‰€æœ‰çš„é‚»å±…
+  è¾“å…¥å‚æ•°ï¼šstart_stationï¼šå¼€å§‹çš„è½¦ç«™
+  è¿” å› å€¼ï¼šç©º
+  è¯´    æ˜ï¼šä¾æ¬¡éå†å¼€å§‹ç«™ç‚¹çš„é‚»æ¥è¡¨
 ***************************************************************************/
 void output_one_step_vertex(vertex& start_station)
 {
 	if (start_station.first_edge == nullptr)
-		cout << "¸Ã½ÚµãÎª¹ÂÁ¢¶¥µã£¬µ±Ç°Õ¾µãÔİÎŞ¿ÉÓÃÂ·Ïß" << endl;
+		cout << "è¯¥èŠ‚ç‚¹ä¸ºå­¤ç«‹é¡¶ç‚¹ï¼Œå½“å‰ç«™ç‚¹æš‚æ— å¯ç”¨è·¯çº¿" << endl;
 	else {
-		edge_node* current_edge = start_station.first_edge;//Ö¸Õë´ÓÕ¾µãµÚÒ»¸ö½Úµã¿ªÊ¼
+		edge_node* current_edge = start_station.first_edge;//æŒ‡é’ˆä»ç«™ç‚¹ç¬¬ä¸€ä¸ªèŠ‚ç‚¹å¼€å§‹
 		while (current_edge) {
 			cout << current_edge->to << " ";
 			current_edge = current_edge->next;
@@ -287,67 +297,67 @@ void output_one_step_vertex(vertex& start_station)
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºadd_vertex
-  ¹¦    ÄÜ£º¼ÓÈëĞÂ¶¥µã
-  ÊäÈë²ÎÊı£ºvertex vertices[max_vertices]:¶¥µãÊı×é
-  int& vertex_number£ºµ±Ç°¶¥µãÊıÁ¿µÄÒıÓÃ£¬ÊµÊ±ĞŞ¸ÄËùÒÔÊ¹ÓÃÒıÓÃ
-  string vertex_name£ºÕ¾µãÃû³Æ
-  station_type type£ºÕ¾µãÀàĞÍ
-  int x£ºÕ¾µãÔ²ĞÄx×ø±ê
-  int y£ºÕ¾µãÔ²ĞÄy×ø±ê
-  ·µ »Ø Öµ£ºtrue(1)ÎªÕı³££¬false(0)ÎªÒÑ¾­·ÅÂú
-  Ëµ    Ã÷£ºÏÈÌí¼Ó£¬ÔÙ×ÔÔö£¬´Ó0¿ªÊ¼
+  å‡½æ•°åç§°ï¼šadd_vertex
+  åŠŸ    èƒ½ï¼šåŠ å…¥æ–°é¡¶ç‚¹
+  è¾“å…¥å‚æ•°ï¼švertex vertices[max_vertices]:é¡¶ç‚¹æ•°ç»„
+  int& vertex_numberï¼šå½“å‰é¡¶ç‚¹æ•°é‡çš„å¼•ç”¨ï¼Œå®æ—¶ä¿®æ”¹æ‰€ä»¥ä½¿ç”¨å¼•ç”¨
+  string vertex_nameï¼šç«™ç‚¹åç§°
+  station_type typeï¼šç«™ç‚¹ç±»å‹
+  int xï¼šç«™ç‚¹åœ†å¿ƒxåæ ‡
+  int yï¼šç«™ç‚¹åœ†å¿ƒyåæ ‡
+  è¿” å› å€¼ï¼štrue(1)ä¸ºæ­£å¸¸ï¼Œfalse(0)ä¸ºå·²ç»æ”¾æ»¡
+  è¯´    æ˜ï¼šå…ˆæ·»åŠ ï¼Œå†è‡ªå¢ï¼Œä»0å¼€å§‹
 ***************************************************************************/
 bool add_vertex(vertex vertices[max_vertices], int& vertex_number, string vertex_name, station_type type, int x, int y)
 {
 	if (vertex_number >= max_vertices)
-		return false;//³¬¶î£¬Ìí¼ÓÊ§°Ü
+		return false;//è¶…é¢ï¼Œæ·»åŠ å¤±è´¥
 	else {
-		vertices[vertex_number].id = vertex_number;//id¼´Îªµ±Ç°ºÅÂë
+		vertices[vertex_number].id = vertex_number;//idå³ä¸ºå½“å‰å·ç 
 		vertices[vertex_number].name = vertex_name;
 		vertices[vertex_number].type= type;
 		vertices[vertex_number].x = x;
 		vertices[vertex_number].y = y;
-		vertex_number++;//È«Ìí¼ÓÍêÔÙ×ÔÔö
+		vertex_number++;//å…¨æ·»åŠ å®Œå†è‡ªå¢
 		return true;
 	}	
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºload_vertices
-  ¹¦    ÄÜ£º´ÓÖ¸¶¨CSVÎÄ¼ş¶ÁÈ¡È«²¿Õ¾µãÊı¾İ
-  ÊäÈë²ÎÊı£ºconst string& file_path£ºÒª¶ÁÈ¡µÄÕ¾µãCSVÎÄ¼şÂ·¾¶
-  vertex vertices[]£º´æ·Å¶ÁÈ¡½á¹ûµÄÕ¾µãÊı×é
-  int& vertex_number£º¼ÇÂ¼³É¹¦¼ÓÈëµÄÕ¾µãÊıÁ¿
-  ·µ »Ø Öµ£ºtrue´ú±í¶ÁÈ¡³É¹¦£¬false´ú±í¶ÁÈ¡Ê§°Ü
-  Ëµ    Ã÷£º
+  å‡½æ•°åç§°ï¼šload_vertices
+  åŠŸ    èƒ½ï¼šä»æŒ‡å®šCSVæ–‡ä»¶è¯»å–å…¨éƒ¨ç«™ç‚¹æ•°æ®
+  è¾“å…¥å‚æ•°ï¼šconst string& file_pathï¼šè¦è¯»å–çš„ç«™ç‚¹CSVæ–‡ä»¶è·¯å¾„
+  vertex vertices[]ï¼šå­˜æ”¾è¯»å–ç»“æœçš„ç«™ç‚¹æ•°ç»„
+  int& vertex_numberï¼šè®°å½•æˆåŠŸåŠ å…¥çš„ç«™ç‚¹æ•°é‡
+  è¿” å› å€¼ï¼štrueä»£è¡¨è¯»å–æˆåŠŸï¼Œfalseä»£è¡¨è¯»å–å¤±è´¥
+  è¯´    æ˜ï¼š
 ***************************************************************************/
 bool load_vertices(const string& file_path, vertex vertices[], int& vertex_number)
 {
 	ifstream stations_file(file_path);
 	if (!stations_file.is_open()) {
-		cout << "Õ¾µãCSVÎÄ¼şÎŞ·¨´ò¿ª£¬ÎŞ·¨½øĞĞºóĞø¼ÆËã" << endl;
+		cout << "ç«™ç‚¹CSVæ–‡ä»¶æ— æ³•æ‰“å¼€ï¼Œæ— æ³•è¿›è¡Œåç»­è®¡ç®—" << endl;
 		return false;
 	}
 	string header;	
-	if (!getline(stations_file, header)) {//°Ñstations_fileµÚÒ»ĞĞÄÚÈİÄÃ³ö£¬·ÅÈëheaderÀï£¬µ±Ç°ÎÄ¼şÖ¸ÕëÎ»ÓÚµÚ¶şĞĞ¿ªÍ·
-		cout << "Ê×ĞĞĞÅÏ¢¶ÁÈ¡Ê§°Ü" << endl;
+	if (!getline(stations_file, header)) {//æŠŠstations_fileç¬¬ä¸€è¡Œå†…å®¹æ‹¿å‡ºï¼Œæ”¾å…¥headeré‡Œï¼Œå½“å‰æ–‡ä»¶æŒ‡é’ˆä½äºç¬¬äºŒè¡Œå¼€å¤´
+		cout << "é¦–è¡Œä¿¡æ¯è¯»å–å¤±è´¥" << endl;
 		return false;
 	}
 	if (header.substr(0, 3) == "\xEF\xBB\xBF")
-		header.erase(0, 3);//UTF8 BOM¸ñÊ½±êÊ¶·ûÊÇEF¡¢BB¡¢BF£¬Èç¹ûÊÇBOM¸ñÊ½È¥³ıÇ°×º£¬·ÇBOM¸ñÊ½µÄÕı³£CSVÔò»áÌø¹ı¸Ãif 
+		header.erase(0, 3);//UTF8 BOMæ ¼å¼æ ‡è¯†ç¬¦æ˜¯EFã€BBã€BFï¼Œå¦‚æœæ˜¯BOMæ ¼å¼å»é™¤å‰ç¼€ï¼ŒéBOMæ ¼å¼çš„æ­£å¸¸CSVåˆ™ä¼šè·³è¿‡è¯¥if 
 #if test_csv_lines
-	cout << "Ê×ĞĞheaderÎª£º" << header << endl;
+	cout << "é¦–è¡Œheaderä¸ºï¼š" << header << endl;
 #endif
 	if (header != "id,name,type,x,y") {
-		cout << "¸ÃÎÄ¼şÊ×ĞĞ²»ÊÇid,name,type£¬¿ÉÄÜ²»ÊÇÕ¾µãÎÄ¼ş£¬Çë¼ì²édata/stations.csv ÄÚÈİ" << endl;
+		cout << "è¯¥æ–‡ä»¶é¦–è¡Œä¸æ˜¯id,name,typeï¼Œå¯èƒ½ä¸æ˜¯ç«™ç‚¹æ–‡ä»¶ï¼Œè¯·æ£€æŸ¥data/stations.csv å†…å®¹" << endl;
 		return false;
 	}
 
 	string data_line;
 	while (getline(stations_file, data_line)) {
 #if test_csv_lines
-		cout << "Õ¾µãÊı¾İÎª£º" << data_line << endl;
+		cout << "ç«™ç‚¹æ•°æ®ä¸ºï¼š" << data_line << endl;
 #endif
 		string station_id_text;
 		string station_name_text;
@@ -360,8 +370,8 @@ bool load_vertices(const string& file_path, vertex vertices[], int& vertex_numbe
 			|| !getline(station_stream, station_type_text, ',')
 			|| !getline(station_stream, station_x_text, ',')
 			|| !getline(station_stream, station_y_text, ',')
-			) {//Öğ¸ö»ñÈ¡Îå¸ö×Ö¶Î£¬Ã¿´ÎÓöµ½,¾ÍÍ£Ö¹
-			cout << "Õ¾µãÊı¾İ×Ö¶Î²»ÍêÕû" << endl;
+			) {//é€ä¸ªè·å–äº”ä¸ªå­—æ®µï¼Œæ¯æ¬¡é‡åˆ°,å°±åœæ­¢
+			cout << "ç«™ç‚¹æ•°æ®å­—æ®µä¸å®Œæ•´" << endl;
 			return false;
 		}
 
@@ -373,12 +383,12 @@ bool load_vertices(const string& file_path, vertex vertices[], int& vertex_numbe
 			station_x = stoi(station_x_text);
 			station_y = stoi(station_y_text);
 		}
-		catch (const invalid_argument&) {//¼ì²é²ÎÊıÊÇ·ñºÏ·¨
-			cout << "Õ¾µã±àºÅ/×ø±ê²»ÊÇºÏ·¨ÕûÊı" << endl;
+		catch (const invalid_argument&) {//æ£€æŸ¥å‚æ•°æ˜¯å¦åˆæ³•
+			cout << "ç«™ç‚¹ç¼–å·/åæ ‡ä¸æ˜¯åˆæ³•æ•´æ•°" << endl;
 			return false;
 		}
-		catch (const out_of_range&) {//¼ì²é²ÎÊıÊÇ·ñ³¬¹ıint·¶Î§
-			cout << "Õ¾µã±àºÅ/×ø±ê³¬·¶Î§" << endl;
+		catch (const out_of_range&) {//æ£€æŸ¥å‚æ•°æ˜¯å¦è¶…è¿‡intèŒƒå›´
+			cout << "ç«™ç‚¹ç¼–å·/åæ ‡è¶…èŒƒå›´" << endl;
 			return false;
 		}
 		station_type parsed_station_type;
@@ -386,69 +396,69 @@ bool load_vertices(const string& file_path, vertex vertices[], int& vertex_numbe
 			parsed_station_type = station_type::METRO;
 		else if (station_type_text == "BUS")
 			parsed_station_type = station_type::BUS;
-		else {//Ò»°ã²»»áÖ´ĞĞµ½ÕâÀï
-			cout << "Õ¾µãÀàĞÍ¼È²»ÊÇµØÌúÒ²²»ÊÇ¹«½»£¬²»ÔÚÃ¶¾ÙÀàĞÍÀï£¬·Ç·¨" << endl;
+		else {//ä¸€èˆ¬ä¸ä¼šæ‰§è¡Œåˆ°è¿™é‡Œ
+			cout << "ç«™ç‚¹ç±»å‹æ—¢ä¸æ˜¯åœ°é“ä¹Ÿä¸æ˜¯å…¬äº¤ï¼Œä¸åœ¨æšä¸¾ç±»å‹é‡Œï¼Œéæ³•" << endl;
 			return false;
 		}
 
 #if test_csv_lines
-		cout << "Õ¾µãidÎª£º" << station_id << endl;
-		cout << "Õ¾µãÃû³ÆÎª£º" << station_name_text << endl;
-		cout << "Õ¾µãÀàĞÍÎª£º" << station_type_text << endl;
-		cout << "Õ¾µãx×ø±êÎª£º" << station_x_text << endl;
-		cout << "Õ¾µãy×ø±êÎª£º" << station_y_text << endl;
+		cout << "ç«™ç‚¹idä¸ºï¼š" << station_id << endl;
+		cout << "ç«™ç‚¹åç§°ä¸ºï¼š" << station_name_text << endl;
+		cout << "ç«™ç‚¹ç±»å‹ä¸ºï¼š" << station_type_text << endl;
+		cout << "ç«™ç‚¹xåæ ‡ä¸ºï¼š" << station_x_text << endl;
+		cout << "ç«™ç‚¹yåæ ‡ä¸ºï¼š" << station_y_text << endl;
 #endif	
 
-		if (vertex_number == station_id) {//Ğ£Ñéµ±Ç°Õ¾µã±àºÅºÍCSVÎÄ¼şÀï¶Áµ½µÄÊÇ·ñÒ»ÖÂ
+		if (vertex_number == station_id) {//æ ¡éªŒå½“å‰ç«™ç‚¹ç¼–å·å’ŒCSVæ–‡ä»¶é‡Œè¯»åˆ°çš„æ˜¯å¦ä¸€è‡´
 			if (add_vertex(vertices, vertex_number, station_name_text, parsed_station_type, station_x, station_y)) {
 #if test_csv_lines
 				cout << vertices[station_id].id << " " << vertices[station_id].name << endl;
 #endif
 			}
 			else {
-				cout << "Õ¾µã³õÊ¼»¯Ê§°Ü" << endl;
+				cout << "ç«™ç‚¹åˆå§‹åŒ–å¤±è´¥" << endl;
 				return false;
 			}
 		}
 		else {
-			cout << "Õ¾µã±àºÅ²»Á¬Ğø»òË³Ğò´íÎó" << endl;
+			cout << "ç«™ç‚¹ç¼–å·ä¸è¿ç»­æˆ–é¡ºåºé”™è¯¯" << endl;
 			return false;
 		}
 	}
-	if (vertex_number == 0) {//Ö»ÓĞ±íÍ·Ã»ÓĞ¾ßÌåÕ¾µã
-		cout << "Õ¾µãCSVÖĞÃ»ÓĞÓĞĞ§Õ¾µãÊı¾İ" << endl;
+	if (vertex_number == 0) {//åªæœ‰è¡¨å¤´æ²¡æœ‰å…·ä½“ç«™ç‚¹
+		cout << "ç«™ç‚¹CSVä¸­æ²¡æœ‰æœ‰æ•ˆç«™ç‚¹æ•°æ®" << endl;
 		return false;
 	}
-	stations_file.close();//¹ØÎÄ¼ş
+	stations_file.close();//å…³æ–‡ä»¶
 
 	return true;
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºinitialize_heap
-  ¹¦    ÄÜ£º³õÊ¼»¯×îĞ¡¶Ñ
-  ÊäÈë²ÎÊı£ºmin_heap& heap£ºĞèÒª¸Ä±ä³É×îĞ¡¶ÑµÄ¶Ñ
-  int initial_capacity£º³õÊ¼ÈİÁ¿
-  ·µ »Ø Öµ£ºfalse±íÊ¾Ê§°Ü£¬true±íÊ¾³É¹¦
-  Ëµ    Ã÷£º
+  å‡½æ•°åç§°ï¼šinitialize_heap
+  åŠŸ    èƒ½ï¼šåˆå§‹åŒ–æœ€å°å †
+  è¾“å…¥å‚æ•°ï¼šmin_heap& heapï¼šéœ€è¦æ”¹å˜æˆæœ€å°å †çš„å †
+  int initial_capacityï¼šåˆå§‹å®¹é‡
+  è¿” å› å€¼ï¼šfalseè¡¨ç¤ºå¤±è´¥ï¼Œtrueè¡¨ç¤ºæˆåŠŸ
+  è¯´    æ˜ï¼š
 ***************************************************************************/
 bool initialize_heap(min_heap& heap,int initial_capacity)
 {
-	if (initial_capacity <= 0|| heap.data)//ÈİÁ¿·ÇÕı»òdataÒÑ¾­´æ·ÅÁËµØÖ·
+	if (initial_capacity <= 0|| heap.data)//å®¹é‡éæ­£æˆ–dataå·²ç»å­˜æ”¾äº†åœ°å€
 		return false;
 	heap_node* p = new heap_node[initial_capacity];
-	heap.data = p;//data×Ö¶ÎÖ¸Ïò¶¯Ì¬¶ÑÊı×éµÄµÚÒ»¸öÔªËØ
+	heap.data = p;//dataå­—æ®µæŒ‡å‘åŠ¨æ€å †æ•°ç»„çš„ç¬¬ä¸€ä¸ªå…ƒç´ 
 	heap.size = 0;
 	heap.capacity = initial_capacity;
 	return true;
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºswap_heap_node
-  ¹¦    ÄÜ£º½»»»Á½¸ö¶Ñ½áµã£¬Á¬´ø×Å¶¥µã±àºÅºÍµ±Ç°¾àÀëÁ½¸ö½á¹¹Ìå³ÉÔ±Ò»Æğ½»»»
-  ÊäÈë²ÎÊı£ºheap_node& node1, heap_node& node2£ºĞèÒª½»»»µÄÁ½¸ö¶Ñ½áµã£¬½»»»ºónode1¡¢node2ËùÓĞ³ÉÔ±»¥»»
-  ·µ »Ø Öµ£ºÎŞ
-  Ëµ    Ã÷£º×¢ÒâÒªÍ¬Ê±½»»»½á¹¹ÌåÀïµÄ±àºÅºÍ¾àÀëÈ·±£ÒÀÈ»Æ¥Åä£¬ÓÉÓÚ½á¹¹ÌåÀïÖ»ÓĞÆÕÍ¨³ÉÔ±£¬Ò²¿ÉÒÔÖ±½Ó½»»»Õû¸ö½á¹¹Ìå£¬¿ÉÓÃ×Ô´øswap
+  å‡½æ•°åç§°ï¼šswap_heap_node
+  åŠŸ    èƒ½ï¼šäº¤æ¢ä¸¤ä¸ªå †ç»“ç‚¹ï¼Œè¿å¸¦ç€é¡¶ç‚¹ç¼–å·å’Œå½“å‰è·ç¦»ä¸¤ä¸ªç»“æ„ä½“æˆå‘˜ä¸€èµ·äº¤æ¢
+  è¾“å…¥å‚æ•°ï¼šheap_node& node1, heap_node& node2ï¼šéœ€è¦äº¤æ¢çš„ä¸¤ä¸ªå †ç»“ç‚¹ï¼Œäº¤æ¢ånode1ã€node2æ‰€æœ‰æˆå‘˜äº’æ¢
+  è¿” å› å€¼ï¼šæ— 
+  è¯´    æ˜ï¼šæ³¨æ„è¦åŒæ—¶äº¤æ¢ç»“æ„ä½“é‡Œçš„ç¼–å·å’Œè·ç¦»ç¡®ä¿ä¾ç„¶åŒ¹é…ï¼Œç”±äºç»“æ„ä½“é‡Œåªæœ‰æ™®é€šæˆå‘˜ï¼Œä¹Ÿå¯ä»¥ç›´æ¥äº¤æ¢æ•´ä¸ªç»“æ„ä½“ï¼Œå¯ç”¨è‡ªå¸¦swap
 ***************************************************************************/
 void swap_heap_node(heap_node& node1, heap_node& node2)
 {
@@ -463,11 +473,11 @@ void swap_heap_node(heap_node& node1, heap_node& node2)
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºsift_up
-  ¹¦    ÄÜ£ºÉÏ¸¡µ¥¸öÎ»ÖÃµÄ½Úµã£¬ºÍ¸¸½Úµã½øĞĞ´óĞ¡¹ØÏµÅĞ¶Ï
-  ÊäÈë²ÎÊı£ºmin_heap& heap£ºĞèÒª¸Ä±äµÄ¶Ñ£¬int index£ºĞèÒªÅĞ¶ÏÊÇ·ñ½»»»µÄÏÂ±ê
-  ·µ »Ø Öµ£ºÎŞ
-  Ëµ    Ã÷£ºindex = fatherÅäºÏwhileÓï¾ä¿ÉÒÔÊµÏÖÖğ²ã¼ì²éÖ±ÖÁ¶Ñ¶¥
+  å‡½æ•°åç§°ï¼šsift_up
+  åŠŸ    èƒ½ï¼šä¸Šæµ®å•ä¸ªä½ç½®çš„èŠ‚ç‚¹ï¼Œå’Œçˆ¶èŠ‚ç‚¹è¿›è¡Œå¤§å°å…³ç³»åˆ¤æ–­
+  è¾“å…¥å‚æ•°ï¼šmin_heap& heapï¼šéœ€è¦æ”¹å˜çš„å †ï¼Œint indexï¼šéœ€è¦åˆ¤æ–­æ˜¯å¦äº¤æ¢çš„ä¸‹æ ‡
+  è¿” å› å€¼ï¼šæ— 
+  è¯´    æ˜ï¼šindex = fatheré…åˆwhileè¯­å¥å¯ä»¥å®ç°é€å±‚æ£€æŸ¥ç›´è‡³å †é¡¶
 ***************************************************************************/
 void sift_up(min_heap& heap, int index)
 {
@@ -477,19 +487,19 @@ void sift_up(min_heap& heap, int index)
 		double index_distance = heap.data[index].distance;
 		if (father_distance > index_distance) {
 			swap_heap_node(heap.data[father], heap.data[index]);
-			index = father;//Èç¹û½»»»£¬½»»»ºó½«index¸³ÖµÎª¸¸½ÚµãµÄÖµ
+			index = father;//å¦‚æœäº¤æ¢ï¼Œäº¤æ¢åå°†indexèµ‹å€¼ä¸ºçˆ¶èŠ‚ç‚¹çš„å€¼
 		}
 		else
-			break;//¸Ã½ÚµãÒÑ¾­µ½ÁËÕıÈ·µÄÎ»ÖÃÉÏ
+			break;//è¯¥èŠ‚ç‚¹å·²ç»åˆ°äº†æ­£ç¡®çš„ä½ç½®ä¸Š
 	}
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºexpand_heap
-  ¹¦    ÄÜ£º¶ÑÂúÊ±À©ÈİÖÁÔ­À´ÈİÁ¿µÄÁ½±¶
-  ÊäÈë²ÎÊı£ºmin_heap& heap£ºĞèÒªÀ©ÈİµÄ¶Ñ
-  ·µ »Ø Öµ£ºfalse´ú±íÀ©ÈİÊ§°Ü£¬true´ú±í³É¹¦
-  Ëµ    Ã÷£ºDijkstraÖĞÍ¬Ò»¶¥µã¿ÉÄÜÒòÎª¾àÀë¸üĞÂ¶ø¶à´ÎÈë¶Ñ£¬ËùÒÔÈİÁ¿²»Ò»¶¨µÈÓÚ¶¥µãÊı£»Ä¬ÈÏÀ©ÎªÁ½±¶
+  å‡½æ•°åç§°ï¼šexpand_heap
+  åŠŸ    èƒ½ï¼šå †æ»¡æ—¶æ‰©å®¹è‡³åŸæ¥å®¹é‡çš„ä¸¤å€
+  è¾“å…¥å‚æ•°ï¼šmin_heap& heapï¼šéœ€è¦æ‰©å®¹çš„å †
+  è¿” å› å€¼ï¼šfalseä»£è¡¨æ‰©å®¹å¤±è´¥ï¼Œtrueä»£è¡¨æˆåŠŸ
+  è¯´    æ˜ï¼šDijkstraä¸­åŒä¸€é¡¶ç‚¹å¯èƒ½å› ä¸ºè·ç¦»æ›´æ–°è€Œå¤šæ¬¡å…¥å †ï¼Œæ‰€ä»¥å®¹é‡ä¸ä¸€å®šç­‰äºé¡¶ç‚¹æ•°ï¼›é»˜è®¤æ‰©ä¸ºä¸¤å€
 ***************************************************************************/
 bool expand_heap(min_heap& heap)
 {
@@ -497,66 +507,66 @@ bool expand_heap(min_heap& heap)
 		return false;
 	heap_node* bigger_heap = new heap_node[heap.capacity * 2];
 	for (int i = 0; i < heap.size; i++)
-		bigger_heap[i] = heap.data[i];//¸´ÖÆ£¬heap.size²»±ä
-	delete[] heap.data;//ÊÍ·Å
-	heap.data = bigger_heap;//dataÖ¸ÏòĞÂ¶Ñ
+		bigger_heap[i] = heap.data[i];//å¤åˆ¶ï¼Œheap.sizeä¸å˜
+	delete[] heap.data;//é‡Šæ”¾
+	heap.data = bigger_heap;//dataæŒ‡å‘æ–°å †
 	heap.capacity *= 2;
 	return true;
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºinsert_heap
-  ¹¦    ÄÜ£ºÔÚ¶ÑÖĞ²åÈëÄ³¸öÔªËØ£¬¼ÓÈësift_upµ÷ÓÃ°üÀ¨ÖØĞÂ¶Ô×îĞ¡¶ÑÅÅĞò£¬¶ÑÂúÊ±»áµ÷ÓÃexpand_heapÀ©Èİ
-  ÊäÈë²ÎÊı£ºmin_heap& heap£ºĞèÒª²åÈëµÄ¶Ñ
-   int vertex_id£º²åÈë¶¥µãµÄ±àºÅ
-   double distance£º²åÈë¶¥µãµÄµ±Ç°¾àÀë
-  ·µ »Ø Öµ£ºfalse´ú±í²åÈëÊ§°Ü£¬true´ú±í³É¹¦
-  Ëµ    Ã÷£ºheap.size >= heap.capacityÖ¸Ã»¿ÕÓàÈİÁ¿£»!heap.data±íÃ÷¶Ñµ±Ç°Ã»ÓĞ¶¯Ì¬Êı×é£¬Í¨³£ÒòÎªinitialize_heap³õÊ¼»¯Ê§°Ü
+  å‡½æ•°åç§°ï¼šinsert_heap
+  åŠŸ    èƒ½ï¼šåœ¨å †ä¸­æ’å…¥æŸä¸ªå…ƒç´ ï¼ŒåŠ å…¥sift_upè°ƒç”¨åŒ…æ‹¬é‡æ–°å¯¹æœ€å°å †æ’åºï¼Œå †æ»¡æ—¶ä¼šè°ƒç”¨expand_heapæ‰©å®¹
+  è¾“å…¥å‚æ•°ï¼šmin_heap& heapï¼šéœ€è¦æ’å…¥çš„å †
+   int vertex_idï¼šæ’å…¥é¡¶ç‚¹çš„ç¼–å·
+   double distanceï¼šæ’å…¥é¡¶ç‚¹çš„å½“å‰è·ç¦»
+  è¿” å› å€¼ï¼šfalseä»£è¡¨æ’å…¥å¤±è´¥ï¼Œtrueä»£è¡¨æˆåŠŸ
+  è¯´    æ˜ï¼šheap.size >= heap.capacityæŒ‡æ²¡ç©ºä½™å®¹é‡ï¼›!heap.dataè¡¨æ˜å †å½“å‰æ²¡æœ‰åŠ¨æ€æ•°ç»„ï¼Œé€šå¸¸å› ä¸ºinitialize_heapåˆå§‹åŒ–å¤±è´¥
 ***************************************************************************/
 bool insert_heap(min_heap& heap, int vertex_id, double distance)
 {
 	if (!heap.data)
 		return false;
-	if( heap.size >= heap.capacity) {//ÆäÊµÖ»ÄÜ=£¬ËùÒÔÖ»ĞèÒªÀ©Ò»´ÎÈİ¼´¿É£¬²»ĞèÒªwhileÑ­»·
+	if( heap.size >= heap.capacity) {//å…¶å®åªèƒ½=ï¼Œæ‰€ä»¥åªéœ€è¦æ‰©ä¸€æ¬¡å®¹å³å¯ï¼Œä¸éœ€è¦whileå¾ªç¯
 		if (!expand_heap(heap))
-			return false;//Ã»return¾ÍÍê³ÉÁËÀ©Èİ
+			return false;//æ²¡returnå°±å®Œæˆäº†æ‰©å®¹
 	}
-	(heap.data + heap.size)->vertex_id = vertex_id;//µÈ¼ÛÓÚ(*(heap.data + heap.size)).vertex_id»òÊÇheap.data[heap.size].vertex_id
+	(heap.data + heap.size)->vertex_id = vertex_id;//ç­‰ä»·äº(*(heap.data + heap.size)).vertex_idæˆ–æ˜¯heap.data[heap.size].vertex_id
 	(heap.data + heap.size)->distance = distance;
-	heap.size++;//²åÈëÍêºóÊµ¼ÊÊıÁ¿¼Ó1
-	sift_up(heap, heap.size - 1);//ÕâÀï²»ºÍÉÏÒ»ĞĞ»»Ë³ĞòÊÇÒòÎªÒª°ÑĞÂÔªËØÕıÊ½ÄÉÈëÓĞĞ§·¶Î§
+	heap.size++;//æ’å…¥å®Œåå®é™…æ•°é‡åŠ 1
+	sift_up(heap, heap.size - 1);//è¿™é‡Œä¸å’Œä¸Šä¸€è¡Œæ¢é¡ºåºæ˜¯å› ä¸ºè¦æŠŠæ–°å…ƒç´ æ­£å¼çº³å…¥æœ‰æ•ˆèŒƒå›´
 	return true;
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºsift_down
-  ¹¦    ÄÜ£ºÏÂ³Áµ¥¸öÎ»ÖÃµÄ½Úµã£¬ºÍ×Ó½Úµã½øĞĞ´óĞ¡¹ØÏµÅĞ¶Ï
-  ÊäÈë²ÎÊı£ºmin_heap& heap£ºĞèÒª¸Ä±äµÄ¶Ñ£¬int index£ºĞèÒªÅĞ¶ÏÊÇ·ñ½»»»µÄÏÂ±ê
-  ·µ »Ø Öµ£ºÎŞ
-  Ëµ    Ã÷£ºindex = left_child/right_child;ÅäºÏwhileÓï¾ä¿ÉÒÔÊµÏÖÖğ²ã¼ì²éÖ±ÖÁÒ¶×Ó½Úµã
+  å‡½æ•°åç§°ï¼šsift_down
+  åŠŸ    èƒ½ï¼šä¸‹æ²‰å•ä¸ªä½ç½®çš„èŠ‚ç‚¹ï¼Œå’Œå­èŠ‚ç‚¹è¿›è¡Œå¤§å°å…³ç³»åˆ¤æ–­
+  è¾“å…¥å‚æ•°ï¼šmin_heap& heapï¼šéœ€è¦æ”¹å˜çš„å †ï¼Œint indexï¼šéœ€è¦åˆ¤æ–­æ˜¯å¦äº¤æ¢çš„ä¸‹æ ‡
+  è¿” å› å€¼ï¼šæ— 
+  è¯´    æ˜ï¼šindex = left_child/right_child;é…åˆwhileè¯­å¥å¯ä»¥å®ç°é€å±‚æ£€æŸ¥ç›´è‡³å¶å­èŠ‚ç‚¹
 ***************************************************************************/
 void sift_down(min_heap& heap, int index)
 {
-	while (2 * index + 1 < heap.size) { //×óº¢×ÓÔÚÏÂ±ê0..(heap.size-1)·¶Î§ÄÚ
+	while (2 * index + 1 < heap.size) { //å·¦å­©å­åœ¨ä¸‹æ ‡0..(heap.size-1)èŒƒå›´å†…
 		int left_child = 2 * index + 1;
 		int right_child = 2 * index + 2;
 		double left_child_distance = heap.data[left_child].distance;
 		double index_distance = heap.data[index].distance;
-		if (right_child >= heap.size) {//Õâ¸öÊ±ºòÖ»ÓĞ×óº¢×Ó
+		if (right_child >= heap.size) {//è¿™ä¸ªæ—¶å€™åªæœ‰å·¦å­©å­
 			if (index_distance > left_child_distance) {
 				swap_heap_node(heap.data[left_child], heap.data[index]);
 				index = left_child;
 			}
-			break;//¶ÑÊÇÍêÈ«¶ş²æÊ÷£¬Î¨Ò»µÄ×óº¢×Ó±ØÈ»ÊÇ×îºóÒ»¸öÔªËØÒ²ÊÇÒ¶×Ó½áµã£¬ËùÒÔ´¦ÀíÍêËüÖ®ºóÎŞÂÛÊÇ·ñ½»»»£¬±¾ÂÖÏÂ³Á¶¼ÒÑ¾­½áÊø£¬¶ø²»ÊÇelse
+			break;//å †æ˜¯å®Œå…¨äºŒå‰æ ‘ï¼Œå”¯ä¸€çš„å·¦å­©å­å¿…ç„¶æ˜¯æœ€åä¸€ä¸ªå…ƒç´ ä¹Ÿæ˜¯å¶å­ç»“ç‚¹ï¼Œæ‰€ä»¥å¤„ç†å®Œå®ƒä¹‹åæ— è®ºæ˜¯å¦äº¤æ¢ï¼Œæœ¬è½®ä¸‹æ²‰éƒ½å·²ç»ç»“æŸï¼Œè€Œä¸æ˜¯else
 		}
-		double right_child_distance = heap.data[right_child].distance;//ÓĞÓÒº¢×Ó²ÅÄÜÄÃ¶ÔÓ¦ÏÂ±ê
-		if (index_distance < left_child_distance && index_distance < right_child_distance)//¸¸×îĞ¡£¬ÒÑµ½Î»
+		double right_child_distance = heap.data[right_child].distance;//æœ‰å³å­©å­æ‰èƒ½æ‹¿å¯¹åº”ä¸‹æ ‡
+		if (index_distance < left_child_distance && index_distance < right_child_distance)//çˆ¶æœ€å°ï¼Œå·²åˆ°ä½
 			break;
-		else if (left_child_distance <= right_child_distance) {//×ó²»³¬¹ıÓÒ²à£¬¸¸½ÚµãºÍ½ÏĞ¡µÄ×ó»»
+		else if (left_child_distance <= right_child_distance) {//å·¦ä¸è¶…è¿‡å³ä¾§ï¼Œçˆ¶èŠ‚ç‚¹å’Œè¾ƒå°çš„å·¦æ¢
 			swap_heap_node(heap.data[left_child], heap.data[index]);
 			index = left_child;
 		}
-		else {//»»¸¸ºÍÓÒ
+		else {//æ¢çˆ¶å’Œå³
 			swap_heap_node(heap.data[right_child], heap.data[index]);
 			index = right_child;
 		}
@@ -564,11 +574,11 @@ void sift_down(min_heap& heap, int index)
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºis_heap_empty
-  ¹¦    ÄÜ£º¼ì²é¶ÑÊÇ·ñÊÇ¿Õ¶Ñ
-  ÊäÈë²ÎÊı£ºconst min_heap &heap£ºĞèÒª¼ì²éµÄ¶Ñ£¬²»ÓÃĞŞ¸Ä£¬ÓÉÓÚÖ»´«Öµ»á¸´ÖÆdataÖ¸Õë¡¢sizeºÍcapacity¹Ê²ÉÓÃconstÏŞ¶¨
-  ·µ »Ø Öµ£ºtrue´ú±íÈ·Êµ¿Õ£¬false´ú±í²¢²»¿Õ
-  Ëµ    Ã÷£ºÖ»¸ù¾İsizeÊÇ·ñÎª0ÅĞ¶Ï£¬²»¸ù¾İdataÅĞ¶Ï£¬ÒòÎªÒÑ¾­³õÊ¼»¯µ«Ã»ÓĞÔªËØÊ±£¬data²»Îª¿Õµ«¶ÑÈÔÈ»ÊÇ¿Õ¶Ñ¡£
+  å‡½æ•°åç§°ï¼šis_heap_empty
+  åŠŸ    èƒ½ï¼šæ£€æŸ¥å †æ˜¯å¦æ˜¯ç©ºå †
+  è¾“å…¥å‚æ•°ï¼šconst min_heap &heapï¼šéœ€è¦æ£€æŸ¥çš„å †ï¼Œä¸ç”¨ä¿®æ”¹ï¼Œç”±äºåªä¼ å€¼ä¼šå¤åˆ¶dataæŒ‡é’ˆã€sizeå’Œcapacityæ•…é‡‡ç”¨consté™å®š
+  è¿” å› å€¼ï¼štrueä»£è¡¨ç¡®å®ç©ºï¼Œfalseä»£è¡¨å¹¶ä¸ç©º
+  è¯´    æ˜ï¼šåªæ ¹æ®sizeæ˜¯å¦ä¸º0åˆ¤æ–­ï¼Œä¸æ ¹æ®dataåˆ¤æ–­ï¼Œå› ä¸ºå·²ç»åˆå§‹åŒ–ä½†æ²¡æœ‰å…ƒç´ æ—¶ï¼Œdataä¸ä¸ºç©ºä½†å †ä»ç„¶æ˜¯ç©ºå †ã€‚
 ***************************************************************************/
 bool is_heap_empty(const min_heap &heap)
 {
@@ -579,31 +589,31 @@ bool is_heap_empty(const min_heap &heap)
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºextract_min
-  ¹¦    ÄÜ£ºµ¯³ö×îĞ¡ÔªËØ£¬ĞèÒª1.É¾³ı¶Ñ¶¥£¬2.°ÑÔ­¶Ñ¶¥µÄheap_node½»¸øµ÷ÓÃÕß
-  ÊäÈë²ÎÊı£ºmin_heap& heap£ºĞèÒªµ¯³öµÄ¶Ñ
-  heap_node &minimum_node£ºÓÃÓÚ·ÅÔ­¶Ñ¶¥µÄheap_node
-  ·µ »Ø Öµ£ºfalse´ú±íµ¯³öÊ§°Ü£¬true´ú±í³É¹¦
-  Ëµ    Ã÷£º
+  å‡½æ•°åç§°ï¼šextract_min
+  åŠŸ    èƒ½ï¼šå¼¹å‡ºæœ€å°å…ƒç´ ï¼Œéœ€è¦1.åˆ é™¤å †é¡¶ï¼Œ2.æŠŠåŸå †é¡¶çš„heap_nodeäº¤ç»™è°ƒç”¨è€…
+  è¾“å…¥å‚æ•°ï¼šmin_heap& heapï¼šéœ€è¦å¼¹å‡ºçš„å †
+  heap_node &minimum_nodeï¼šç”¨äºæ”¾åŸå †é¡¶çš„heap_node
+  è¿” å› å€¼ï¼šfalseä»£è¡¨å¼¹å‡ºå¤±è´¥ï¼Œtrueä»£è¡¨æˆåŠŸ
+  è¯´    æ˜ï¼š
 ***************************************************************************/
 bool extract_min(min_heap& heap, heap_node& minimum_node)
 {
 	if (is_heap_empty(heap))
 		return false;
-	minimum_node = heap.data[0];//´æ·Å¶Ñ¶¥ÔªËØ
+	minimum_node = heap.data[0];//å­˜æ”¾å †é¡¶å…ƒç´ 
 	heap.data[0] = heap.data[heap.size - 1];
-	heap.size--;//Î»ÖÃ-1
-	sift_down(heap, 0);//´Ó¶Ñ¶¥¿ªÊ¼ÏÂ³Á
+	heap.size--;//ä½ç½®-1
+	sift_down(heap, 0);//ä»å †é¡¶å¼€å§‹ä¸‹æ²‰
 
 	return true;
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºrelease_heap
-  ¹¦    ÄÜ£ºÊÍ·ÅÕû¸ö¶Ñ
-  ÊäÈë²ÎÊı£ºmin_heap& heap£ºĞèÒªÊÍ·ÅµÄ¶Ñ
-  ·µ »Ø Öµ£ºÎŞ
-  Ëµ    Ã÷£ºÏÈÊÍ·Ådata¶ÔÏó¶¯Ì¬ÄÚ´æÉêÇëµÄÊı×é£¬È»ºóÖØÖÃ½á¹¹ÌåÀï¸÷¸ö³ÉÔ±µÄÖµ
+  å‡½æ•°åç§°ï¼šrelease_heap
+  åŠŸ    èƒ½ï¼šé‡Šæ”¾æ•´ä¸ªå †
+  è¾“å…¥å‚æ•°ï¼šmin_heap& heapï¼šéœ€è¦é‡Šæ”¾çš„å †
+  è¿” å› å€¼ï¼šæ— 
+  è¯´    æ˜ï¼šå…ˆé‡Šæ”¾dataå¯¹è±¡åŠ¨æ€å†…å­˜ç”³è¯·çš„æ•°ç»„ï¼Œç„¶åé‡ç½®ç»“æ„ä½“é‡Œå„ä¸ªæˆå‘˜çš„å€¼
 ***************************************************************************/
 void release_heap(min_heap& heap) 
 {
@@ -614,11 +624,11 @@ void release_heap(min_heap& heap)
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºget_effective_time_cost
-  ¹¦    ÄÜ£º´Ótime_costºÍbike_time_costÀïÑ¡Ò»¸öºÏÀíÖµ
-  ÊäÈë²ÎÊı£ºconst edge_node& node£ºĞèÒªÅĞ¶ÏµÄ±ß£¬bool allow_bike£ºÊÇ·ñÔÊĞíÆï³µÀ´´úÌæ»ñµÃ¸ü¶ÌµÄtime_cost
-  ·µ »Ø Öµ£º×îÖÕÑ¡¶¨µÄtime_cost
-  Ëµ    Ã÷£ºÈç¹ûÔÊĞíÆï³µ£»ÀàĞÍÎª»»³Ë±ß£»Æï³µÓÃÊ±ºÏÀíÍ¬Ê±Âú×ãtime_costÎªÆïĞĞÓÃÊ±
+  å‡½æ•°åç§°ï¼šget_effective_time_cost
+  åŠŸ    èƒ½ï¼šä»time_costå’Œbike_time_costé‡Œé€‰ä¸€ä¸ªåˆç†å€¼
+  è¾“å…¥å‚æ•°ï¼šconst edge_node& nodeï¼šéœ€è¦åˆ¤æ–­çš„è¾¹ï¼Œbool allow_bikeï¼šæ˜¯å¦å…è®¸éª‘è½¦æ¥ä»£æ›¿è·å¾—æ›´çŸ­çš„time_cost
+  è¿” å› å€¼ï¼šæœ€ç»ˆé€‰å®šçš„time_cost
+  è¯´    æ˜ï¼šå¦‚æœå…è®¸éª‘è½¦ï¼›ç±»å‹ä¸ºæ¢ä¹˜è¾¹ï¼›éª‘è½¦ç”¨æ—¶åˆç†åŒæ—¶æ»¡è¶³time_costä¸ºéª‘è¡Œç”¨æ—¶
 ***************************************************************************/
 int get_effective_time_cost(const edge_node& node, bool allow_bike = false)
 {
@@ -629,11 +639,11 @@ int get_effective_time_cost(const edge_node& node, bool allow_bike = false)
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºcalculate_weight
-  ¹¦    ÄÜ£º°´ÕÕW=time_cost+k¡Áfare_cost¼ÆËãÈ¨ÖØ
-  ÊäÈë²ÎÊı£ºconst edge_node& node£ºĞèÒª¼ÆËãÈ¨ÖØµÄ±ß£¬double k£ºÔ¤ÉèµÄÇãÏòÓÚ·ÑÓÃ»¹ÊÇÇãÏòÓÚÊ±¼äµÄ±ÈÀı£¬bool allow_bike£ºÊÇ·ñÔÊĞíÆï³µÀ´´úÌæ»ñµÃ¸ü¶ÌµÄtime_cost
-  ·µ »Ø Öµ£ºËãÊ½µÄ½á¹û
-  Ëµ    Ã÷£ºÓÉÓÚ²»ÓÃĞŞ¸ÄnodeÇÒÎª½á¹¹Ìå£¬ËùÒÔÓÃ³£Á¿ÒıÓÃ
+  å‡½æ•°åç§°ï¼šcalculate_weight
+  åŠŸ    èƒ½ï¼šæŒ‰ç…§W=time_cost+kÃ—fare_costè®¡ç®—æƒé‡
+  è¾“å…¥å‚æ•°ï¼šconst edge_node& nodeï¼šéœ€è¦è®¡ç®—æƒé‡çš„è¾¹ï¼Œdouble kï¼šé¢„è®¾çš„å€¾å‘äºè´¹ç”¨è¿˜æ˜¯å€¾å‘äºæ—¶é—´çš„æ¯”ä¾‹ï¼Œbool allow_bikeï¼šæ˜¯å¦å…è®¸éª‘è½¦æ¥ä»£æ›¿è·å¾—æ›´çŸ­çš„time_cost
+  è¿” å› å€¼ï¼šç®—å¼çš„ç»“æœ
+  è¯´    æ˜ï¼šç”±äºä¸ç”¨ä¿®æ”¹nodeä¸”ä¸ºç»“æ„ä½“ï¼Œæ‰€ä»¥ç”¨å¸¸é‡å¼•ç”¨
 ***************************************************************************/
 double calculate_weight(const edge_node & node, double k, bool allow_bike = false)
 {
@@ -641,14 +651,14 @@ double calculate_weight(const edge_node & node, double k, bool allow_bike = fals
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºoutput_dijkstra_arrays
-  ¹¦    ÄÜ£º´òÓ¡×îĞÂ×î¶Ì¾àÀëdistanceÊı×éºÍprevious_vertexÇ°ÇıÊı×é£¬½öÓÃcoutÕ¹ÏÖ
-  ÊäÈë²ÎÊı£ºconst string& prompt£º±íÃ÷ÕâÊÇÊ²Ã´×´Ì¬ÏÂµÄÊı×é
-   const double distance[]£º×î¶Ì¾àÀëÊı×é
-   const int previous_vertex[]£ºÇ°ÇıÊı×é£¬ÓÃÀ´¼ÇÂ¼×î¶ÌÂ·¾¶
-   int vertex_number£ºĞèÒªÊä³ö¶àÉÙ¸ö¶¥µã
-  ·µ »Ø Öµ£º¿Õ
-  Ëµ    Ã÷£ºÓÃcout´òÓ¡Êı×é¸÷¸öÔªËØ£¬ÒòÎªÖ»ÓÃ¶ÁËùÒÔ´«²ÎÓÃconst£¬Ö»ÓĞµ÷ÊÔµÄÊ±ºòĞèÒªÓÃµ½Õâ¸öº¯Êı¼ÇÂ¼±ä»¯×´Ì¬
+  å‡½æ•°åç§°ï¼šoutput_dijkstra_arrays
+  åŠŸ    èƒ½ï¼šæ‰“å°æœ€æ–°æœ€çŸ­è·ç¦»distanceæ•°ç»„å’Œprevious_vertexå‰é©±æ•°ç»„ï¼Œä»…ç”¨coutå±•ç°
+  è¾“å…¥å‚æ•°ï¼šconst string& promptï¼šè¡¨æ˜è¿™æ˜¯ä»€ä¹ˆçŠ¶æ€ä¸‹çš„æ•°ç»„
+   const double distance[]ï¼šæœ€çŸ­è·ç¦»æ•°ç»„
+   const int previous_vertex[]ï¼šå‰é©±æ•°ç»„ï¼Œç”¨æ¥è®°å½•æœ€çŸ­è·¯å¾„
+   int vertex_numberï¼šéœ€è¦è¾“å‡ºå¤šå°‘ä¸ªé¡¶ç‚¹
+  è¿” å› å€¼ï¼šç©º
+  è¯´    æ˜ï¼šç”¨coutæ‰“å°æ•°ç»„å„ä¸ªå…ƒç´ ï¼Œå› ä¸ºåªç”¨è¯»æ‰€ä»¥ä¼ å‚ç”¨constï¼Œåªæœ‰è°ƒè¯•çš„æ—¶å€™éœ€è¦ç”¨åˆ°è¿™ä¸ªå‡½æ•°è®°å½•å˜åŒ–çŠ¶æ€
 ***************************************************************************/
 void output_dijkstra_arrays(const string& prompt,const double distance[], const int previous_vertex[], int vertex_number)
 {
@@ -663,59 +673,59 @@ void output_dijkstra_arrays(const string& prompt,const double distance[], const 
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºis_valid_vertex_id
-  ¹¦    ÄÜ£º¼ì²évertex_idÊÇ·ñÔÚ0..vertex_number-1Ö®¼ä
-  ÊäÈë²ÎÊı£ºconst int vertex_id£ºĞèÒª¼ì²éµÄ¶¥µãÏÂ±ê£¬const int vertex_number£º×Ü¶¥µãÊı
-  ·µ »Ø Öµ£ºtrue±íÊ¾ÔÚ·¶Î§ÄÚ£¬false±íÊ¾²»ÔÚ·¶Î§ÄÚ
-  Ëµ    Ã÷£ººÜ¶àº¯ÊıĞèÒª¼ì²évertex_idÊÇ·ñÔÚÕıÈ·µÄÊı×éÏÂ±ê·¶Î§ÄÚ£¬¿Éµ÷ÓÃ¸Ãº¯Êı
+  å‡½æ•°åç§°ï¼šis_valid_vertex_id
+  åŠŸ    èƒ½ï¼šæ£€æŸ¥vertex_idæ˜¯å¦åœ¨0..vertex_number-1ä¹‹é—´
+  è¾“å…¥å‚æ•°ï¼šconst int vertex_idï¼šéœ€è¦æ£€æŸ¥çš„é¡¶ç‚¹ä¸‹æ ‡ï¼Œconst int vertex_numberï¼šæ€»é¡¶ç‚¹æ•°
+  è¿” å› å€¼ï¼štrueè¡¨ç¤ºåœ¨èŒƒå›´å†…ï¼Œfalseè¡¨ç¤ºä¸åœ¨èŒƒå›´å†…
+  è¯´    æ˜ï¼šå¾ˆå¤šå‡½æ•°éœ€è¦æ£€æŸ¥vertex_idæ˜¯å¦åœ¨æ­£ç¡®çš„æ•°ç»„ä¸‹æ ‡èŒƒå›´å†…ï¼Œå¯è°ƒç”¨è¯¥å‡½æ•°
 ***************************************************************************/
 bool is_valid_vertex_id(const int vertex_id,const int vertex_number)
 {
 	if (vertex_id >= 0 && vertex_id < vertex_number)
-		return true;//¿ªÊ¼ÏÂ±êÓ¦¸ÃÔÚ0..vertex_number-1Ö®¼ä£¬Êı×éÏÂ±ê
+		return true;//å¼€å§‹ä¸‹æ ‡åº”è¯¥åœ¨0..vertex_number-1ä¹‹é—´ï¼Œæ•°ç»„ä¸‹æ ‡
 	else
 		return false;
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºload_edges
-  ¹¦    ÄÜ£º´ÓÖ¸¶¨CSVÎÄ¼ş¶ÁÈ¡È«²¿±ßÊı¾İ
-  ÊäÈë²ÎÊı£ºconst string& file_path£ºÒª¶ÁÈ¡µÄ±ßCSVÎÄ¼şÂ·¾¶
-  vertex vertices[]£ºĞèÒªĞŞ¸ÄÁÚ½Ó±íµÄ¶¥µãÊı×é
-  int vertex_number£º¼ì²éÁ½¸ö¶Ëµã±àºÅ
-  const transit_line lines[]£ºÏßÂ·Êı×é
-  int line_number£º¼ì²é line_id ·¶Î§
-  ·µ »Ø Öµ£ºtrue´ú±í¶ÁÈ¡³É¹¦£¬false´ú±í¶ÁÈ¡Ê§°Ü
-  Ëµ    Ã÷£º´Ë´¦vertex_number×ª·ÇÒıÓÃÊÇÒòÎª²»ÔÙĞèÒªĞŞ¸Ä£¬½öÓÃÓÚ¼ì²é·¶Î§£»Ò»ĞĞCSV±íÊ¾Ò»ÌõÎŞÏò±ß£¬º¯ÊıÄÚ²¿µ÷ÓÃadd_undirected_edge´´½¨Á½¸ö·½Ïò
+  å‡½æ•°åç§°ï¼šload_edges
+  åŠŸ    èƒ½ï¼šä»æŒ‡å®šCSVæ–‡ä»¶è¯»å–å…¨éƒ¨è¾¹æ•°æ®
+  è¾“å…¥å‚æ•°ï¼šconst string& file_pathï¼šè¦è¯»å–çš„è¾¹CSVæ–‡ä»¶è·¯å¾„
+  vertex vertices[]ï¼šéœ€è¦ä¿®æ”¹é‚»æ¥è¡¨çš„é¡¶ç‚¹æ•°ç»„
+  int vertex_numberï¼šæ£€æŸ¥ä¸¤ä¸ªç«¯ç‚¹ç¼–å·
+  const transit_line lines[]ï¼šçº¿è·¯æ•°ç»„
+  int line_numberï¼šæ£€æŸ¥ line_id èŒƒå›´
+  è¿” å› å€¼ï¼štrueä»£è¡¨è¯»å–æˆåŠŸï¼Œfalseä»£è¡¨è¯»å–å¤±è´¥
+  è¯´    æ˜ï¼šæ­¤å¤„vertex_numberè½¬éå¼•ç”¨æ˜¯å› ä¸ºä¸å†éœ€è¦ä¿®æ”¹ï¼Œä»…ç”¨äºæ£€æŸ¥èŒƒå›´ï¼›ä¸€è¡ŒCSVè¡¨ç¤ºä¸€æ¡æ— å‘è¾¹ï¼Œå‡½æ•°å†…éƒ¨è°ƒç”¨add_undirected_edgeåˆ›å»ºä¸¤ä¸ªæ–¹å‘
 ***************************************************************************/
 bool load_edges(const string& file_path, vertex vertices[], int vertex_number, const transit_line lines[], int line_number)
 {
 	ifstream edges_file(file_path);
 	if (!edges_file.is_open()) {
-		cout << "±ßCSVÎÄ¼şÎŞ·¨´ò¿ª£¬ÎŞ·¨½øĞĞºóĞø¼ÆËã" << endl;
+		cout << "è¾¹CSVæ–‡ä»¶æ— æ³•æ‰“å¼€ï¼Œæ— æ³•è¿›è¡Œåç»­è®¡ç®—" << endl;
 		return false;
 	}
 	string header;
-	if (!getline(edges_file, header)) {//°Ñedges_fileµÚÒ»ĞĞÄÚÈİÄÃ³ö£¬·ÅÈëheaderÀï£¬µ±Ç°ÎÄ¼şÖ¸ÕëÎ»ÓÚµÚ¶şĞĞ¿ªÍ·
-		cout << "Ê×ĞĞĞÅÏ¢¶ÁÈ¡Ê§°Ü" << endl;
+	if (!getline(edges_file, header)) {//æŠŠedges_fileç¬¬ä¸€è¡Œå†…å®¹æ‹¿å‡ºï¼Œæ”¾å…¥headeré‡Œï¼Œå½“å‰æ–‡ä»¶æŒ‡é’ˆä½äºç¬¬äºŒè¡Œå¼€å¤´
+		cout << "é¦–è¡Œä¿¡æ¯è¯»å–å¤±è´¥" << endl;
 		return false;
 	}
 	if (header.substr(0, 3) == "\xEF\xBB\xBF")
-		header.erase(0, 3);//UTF8 BOM¸ñÊ½±êÊ¶·ûÊÇEF¡¢BB¡¢BF£¬Èç¹ûÊÇBOM¸ñÊ½È¥³ıÇ°×º£¬·ÇBOM¸ñÊ½µÄÕı³£CSVÔò»áÌø¹ı¸Ãif 
+		header.erase(0, 3);//UTF8 BOMæ ¼å¼æ ‡è¯†ç¬¦æ˜¯EFã€BBã€BFï¼Œå¦‚æœæ˜¯BOMæ ¼å¼å»é™¤å‰ç¼€ï¼ŒéBOMæ ¼å¼çš„æ­£å¸¸CSVåˆ™ä¼šè·³è¿‡è¯¥if 
 #if test_csv_lines
-	cout << "Ê×ĞĞheaderÎª£º" << header << endl;
+	cout << "é¦–è¡Œheaderä¸ºï¼š" << header << endl;
 #endif
 	if (header != "first_vertex_id,second_vertex_id,time_cost,fare_cost,type,line_id,bike_time_cost") {
-		cout << "¸ÃÎÄ¼şÊ×ĞĞ²»ÊÇfirst_vertex_id,second_vertex_id,time_cost,fare_cost,type,line_id,bike_time_cost. ºÜ¿ÉÄÜ²»ÊÇ±ßÎÄ¼ş£¬Çë¼ì²édata/edges.csv ÄÚÈİ" << endl;
+		cout << "è¯¥æ–‡ä»¶é¦–è¡Œä¸æ˜¯first_vertex_id,second_vertex_id,time_cost,fare_cost,type,line_id,bike_time_cost. å¾ˆå¯èƒ½ä¸æ˜¯è¾¹æ–‡ä»¶ï¼Œè¯·æ£€æŸ¥data/edges.csv å†…å®¹" << endl;
 		return false;
 	}
 
-	int current_line_number = 1;//¼ÇÂ¼Îª
+	int current_line_number = 1;//è®°å½•ä¸º
 	string data_line;
 	while (getline(edges_file, data_line)) {
 
 #if test_csv_lines
-		cout << "±ßÊı¾İÎª£º" << data_line << endl;
+		cout << "è¾¹æ•°æ®ä¸ºï¼š" << data_line << endl;
 #endif
 
 		string first_vertex_id_text;
@@ -732,8 +742,8 @@ bool load_edges(const string& file_path, vertex vertices[], int vertex_number, c
 			!getline(edges_stream, fare_cost_text, ',') ||
 			!getline(edges_stream, edge_type_text, ',') ||
 			!getline(edges_stream, line_id_text, ',') ||
-			!getline(edges_stream, bike_time_cost_text, ',')) {//Öğ¸ö»ñÈ¡Æß¸ö×Ö¶Î£¬Ã¿´ÎÓöµ½,¾ÍÍ£Ö¹
-			cout << "±ßÊı¾İ×Ö¶Î²»ÍêÕû" << endl;
+			!getline(edges_stream, bike_time_cost_text, ',')) {//é€ä¸ªè·å–ä¸ƒä¸ªå­—æ®µï¼Œæ¯æ¬¡é‡åˆ°,å°±åœæ­¢
+			cout << "è¾¹æ•°æ®å­—æ®µä¸å®Œæ•´" << endl;
 			return false;
 		}
 		int first_vertex_id;
@@ -746,16 +756,16 @@ bool load_edges(const string& file_path, vertex vertices[], int vertex_number, c
 			first_vertex_id = stoi(first_vertex_id_text);
 			second_vertex_id = stoi(second_vertex_id_text);
 			time_cost = stoi(time_cost_text);
-			fare_cost = stod(fare_cost_text);//×¢Òâ£¬fare_costÊÇdoubleĞÍËùÒÔÓÃstod
+			fare_cost = stod(fare_cost_text);//æ³¨æ„ï¼Œfare_costæ˜¯doubleå‹æ‰€ä»¥ç”¨stod
 			line_id = stoi(line_id_text);
 			bike_time_cost = stoi(bike_time_cost_text);
 		}
 		catch (const invalid_argument&) {
-			cout << "µÚ" << current_line_number << "Ìõ±ß" << "Ä³¸öÊı×Ö×Ö¶Î·ÇÊı×ÖÀàĞÍ" << endl;
+			cout << "ç¬¬" << current_line_number << "æ¡è¾¹" << "æŸä¸ªæ•°å­—å­—æ®µéæ•°å­—ç±»å‹" << endl;
 			return false;
 		}
 		catch (const out_of_range&) {
-			cout << "µÚ" << current_line_number << "Ìõ±ß" << "Ä³¸öÊı×Ö×Ö¶Î³¬¹ıºÏ·¨·¶Î§" << endl;
+			cout << "ç¬¬" << current_line_number << "æ¡è¾¹" << "æŸä¸ªæ•°å­—å­—æ®µè¶…è¿‡åˆæ³•èŒƒå›´" << endl;
 			return false;
 		}
 		edge_type parsed_edge_type;
@@ -765,51 +775,51 @@ bool load_edges(const string& file_path, vertex vertices[], int vertex_number, c
 			parsed_edge_type = edge_type::BUS;
 		else if (edge_type_text == "TRANSFER")
 			parsed_edge_type = edge_type::TRANSFER;
-		else {//Ò»°ã²»»áÖ´ĞĞµ½ÕâÀï
-			cout << "µÚ" << current_line_number << "Ìõ±ß" << "±ßÀàĞÍ¼È²»ÊÇµØÌúÒ²²»ÊÇ¹«½»Ò²²»ÊÇ»»³Ë£¬·Ç·¨" << endl;
+		else {//ä¸€èˆ¬ä¸ä¼šæ‰§è¡Œåˆ°è¿™é‡Œ
+			cout << "ç¬¬" << current_line_number << "æ¡è¾¹" << "è¾¹ç±»å‹æ—¢ä¸æ˜¯åœ°é“ä¹Ÿä¸æ˜¯å…¬äº¤ä¹Ÿä¸æ˜¯æ¢ä¹˜ï¼Œéæ³•" << endl;
 			return false;
 		}
 
 		if (!is_valid_vertex_id(first_vertex_id, vertex_number) ||
-			!is_valid_vertex_id(second_vertex_id, vertex_number)) {//¶¥µã±àºÅ·¶Î§
-			cout << "µÚ" << current_line_number << "Ìõ±ß" << "Õ¾µã±àºÅ·¶Î§²»ºÏ·¨" << endl;
+			!is_valid_vertex_id(second_vertex_id, vertex_number)) {//é¡¶ç‚¹ç¼–å·èŒƒå›´
+			cout << "ç¬¬" << current_line_number << "æ¡è¾¹" << "ç«™ç‚¹ç¼–å·èŒƒå›´ä¸åˆæ³•" << endl;
 			return false;
 		}
-		if (first_vertex_id == second_vertex_id) {//¼ì²éÆğµãÖÕµã±àºÅ
-			cout << "µÚ" << current_line_number << "Ìõ±ß" << "Õ¾µãÆğµãÖÕµã±àºÅÏàÍ¬£¬ĞÎ³É´íÎó×Ô»·" << endl;
+		if (first_vertex_id == second_vertex_id) {//æ£€æŸ¥èµ·ç‚¹ç»ˆç‚¹ç¼–å·
+			cout << "ç¬¬" << current_line_number << "æ¡è¾¹" << "ç«™ç‚¹èµ·ç‚¹ç»ˆç‚¹ç¼–å·ç›¸åŒï¼Œå½¢æˆé”™è¯¯è‡ªç¯" << endl;
 			return false;
 		}
-		if (time_cost < 0) {//×¢Òâ£¬0Ò²²»ĞĞ£¬ÒòÎªÒª´¦Àí¹«½»Õ¾ÎÊÌâ
-			cout << "µÚ" << current_line_number << "Ìõ±ß" << "Ê±¼äĞ¡ÓÚµÈÓÚ0£¬Êı¾İ´íÎóµÄÈ¨ÖØ²»ÄÜÓÃDijkstra" << endl;
+		if (time_cost < 0) {//æ³¨æ„ï¼Œ0ä¹Ÿä¸è¡Œï¼Œå› ä¸ºè¦å¤„ç†å…¬äº¤ç«™é—®é¢˜
+			cout << "ç¬¬" << current_line_number << "æ¡è¾¹" << "æ—¶é—´å°äºç­‰äº0ï¼Œæ•°æ®é”™è¯¯çš„æƒé‡ä¸èƒ½ç”¨Dijkstra" << endl;
 			return false;
 		}
 		if (fare_cost < 0) {
-			cout << "µÚ" << current_line_number << "Ìõ±ß" << "·ÑÓÃĞ¡ÓÚ0£¬Êı¾İ´íÎóµÄÈ¨ÖØ²»ÄÜÓÃDijkstra" << endl;
+			cout << "ç¬¬" << current_line_number << "æ¡è¾¹" << "è´¹ç”¨å°äº0ï¼Œæ•°æ®é”™è¯¯çš„æƒé‡ä¸èƒ½ç”¨Dijkstra" << endl;
 			return false;
 		} 
 		if (parsed_edge_type == edge_type::METRO || parsed_edge_type == edge_type::BUS) {
 			if (line_id < 0 || line_id >= line_number) {
-				cout << "µÚ" << current_line_number << "Ìõ±ß" << "¹«½»/µØÌúÏßÂ·µÄ±àºÅ·¶Î§´íÎó" << endl;
+				cout << "ç¬¬" << current_line_number << "æ¡è¾¹" << "å…¬äº¤/åœ°é“çº¿è·¯çš„ç¼–å·èŒƒå›´é”™è¯¯" << endl;
 				return false;
 			}
 			if (lines[line_id].type!= parsed_edge_type) {
-				cout << "µÚ" << current_line_number << "Ìõ±ß" << "ÏßÂ·ÀàĞÍºÍCSVÀàĞÍ²»Æ¥Åä" << endl;
+				cout << "ç¬¬" << current_line_number << "æ¡è¾¹" << "çº¿è·¯ç±»å‹å’ŒCSVç±»å‹ä¸åŒ¹é…" << endl;
 				return false;
 			}
 			if (bike_time_cost != -1) {
-				cout << "µÚ" << current_line_number << "Ìõ±ß" << "ÏßÂ·ÀàĞÍÎªµØÌú»ò¹«½»£¬µ«ÆïĞĞ±ß·Ç-1£¬ÊÇ·ñÊäÈëÁË´íÎóµÄÀàĞÍ£¿" << endl;
+				cout << "ç¬¬" << current_line_number << "æ¡è¾¹" << "çº¿è·¯ç±»å‹ä¸ºåœ°é“æˆ–å…¬äº¤ï¼Œä½†éª‘è¡Œè¾¹é-1ï¼Œæ˜¯å¦è¾“å…¥äº†é”™è¯¯çš„ç±»å‹ï¼Ÿ" << endl;
 				return false;
 			}
 			switch (parsed_edge_type) {
 				case edge_type::METRO:
 					if (vertices[first_vertex_id].type != station_type::METRO || vertices[second_vertex_id].type != station_type::METRO) {
-						cout << "µÚ" << current_line_number << "ÌõµØÌú±ßµÄÁ½¶Ë²»È«ÊÇµØÌúÕ¾£¬ÀàĞÍ´íÎó" << endl;
+						cout << "ç¬¬" << current_line_number << "æ¡åœ°é“è¾¹çš„ä¸¤ç«¯ä¸å…¨æ˜¯åœ°é“ç«™ï¼Œç±»å‹é”™è¯¯" << endl;
 						return false;
 					}
 					break;
 				case edge_type::BUS:
 					if (vertices[first_vertex_id].type != station_type::BUS || vertices[second_vertex_id].type != station_type::BUS) {
-						cout << "µÚ" << current_line_number << "Ìõ¹«½»±ßµÄÁ½¶Ë²»È«ÊÇ¹«½»Õ¾£¬ÀàĞÍ´íÎó" << endl;
+						cout << "ç¬¬" << current_line_number << "æ¡å…¬äº¤è¾¹çš„ä¸¤ç«¯ä¸å…¨æ˜¯å…¬äº¤ç«™ï¼Œç±»å‹é”™è¯¯" << endl;
 						return false;
 					}
 					break;
@@ -817,15 +827,15 @@ bool load_edges(const string& file_path, vertex vertices[], int vertex_number, c
 		}
 		else if (parsed_edge_type == edge_type::TRANSFER) {
 			if (line_id != -1) {
-				cout << "µÚ" << current_line_number << "Ìõ±ß" << "ÏßÂ·ÀàĞÍÎª»»³Ë£¬µ«ÏßÂ·±àºÅ·Ç-1£¬ÊÇ·ñÊäÈëÁË´íÎóµÄÀàĞÍ£¿" << endl;
+				cout << "ç¬¬" << current_line_number << "æ¡è¾¹" << "çº¿è·¯ç±»å‹ä¸ºæ¢ä¹˜ï¼Œä½†çº¿è·¯ç¼–å·é-1ï¼Œæ˜¯å¦è¾“å…¥äº†é”™è¯¯çš„ç±»å‹ï¼Ÿ" << endl;
 				return false;
 			}
 			if (fare_cost != 0) {
-				cout << "µÚ" << current_line_number << "Ìõ±ß" << "ÏßÂ·ÀàĞÍÎª»»³Ë£¬µ«·ÑÓÃ²»Îª0£¬ÊÇ·ñÊäÈëÁË´íÎóµÄÀàĞÍ£¿" << endl;
+				cout << "ç¬¬" << current_line_number << "æ¡è¾¹" << "çº¿è·¯ç±»å‹ä¸ºæ¢ä¹˜ï¼Œä½†è´¹ç”¨ä¸ä¸º0ï¼Œæ˜¯å¦è¾“å…¥äº†é”™è¯¯çš„ç±»å‹ï¼Ÿ" << endl;
 				return false;
 			}
 			if (bike_time_cost != -1 && (bike_time_cost <= 0 || bike_time_cost >= time_cost)){
-				cout << "µÚ" << current_line_number << "Ìõ±ß" << "ÊÇ»»³Ë±ß£¬ÔÊĞíÆïĞĞ£¬µ«ÊÇÆïĞĞºÄÊ±²»ºÏ·¨(·ÇÕıÖµ»ò²¢Î´±È²½ĞĞ½ÚÊ¡Ê±¼ä)" << endl;
+				cout << "ç¬¬" << current_line_number << "æ¡è¾¹" << "æ˜¯æ¢ä¹˜è¾¹ï¼Œå…è®¸éª‘è¡Œï¼Œä½†æ˜¯éª‘è¡Œè€—æ—¶ä¸åˆæ³•(éæ­£å€¼æˆ–å¹¶æœªæ¯”æ­¥è¡ŒèŠ‚çœæ—¶é—´)" << endl;
 				return false;
 			}
 		}
@@ -837,13 +847,13 @@ bool load_edges(const string& file_path, vertex vertices[], int vertex_number, c
 	
 
 #if test_csv_lines
-		cout << "±ßµÄÒ»¶Ë¶¥µã±àºÅÎª£º" << first_vertex_id << endl;
-		cout << "±ßµÄÁíÒ»¶Ë¶¥µã±àºÅÎª£º" << second_vertex_id << endl;
-		cout << "±ßµÄÊ±¼ä»¨·ÑÎª£º" << time_cost << endl;
-		cout << "±ßµÄ·ÑÓÃÎª£º" << fare_cost << endl;
-		cout << "±ßµÄÀàĞÍÎª£º" << edge_type_text << endl;
-		cout << "ÏßÂ·±àºÅÎª£º" << line_id << endl;
-		cout << "±ßÆïĞĞÊ±³¤Îª£º" << bike_time_cost << endl;
+		cout << "è¾¹çš„ä¸€ç«¯é¡¶ç‚¹ç¼–å·ä¸ºï¼š" << first_vertex_id << endl;
+		cout << "è¾¹çš„å¦ä¸€ç«¯é¡¶ç‚¹ç¼–å·ä¸ºï¼š" << second_vertex_id << endl;
+		cout << "è¾¹çš„æ—¶é—´èŠ±è´¹ä¸ºï¼š" << time_cost << endl;
+		cout << "è¾¹çš„è´¹ç”¨ä¸ºï¼š" << fare_cost << endl;
+		cout << "è¾¹çš„ç±»å‹ä¸ºï¼š" << edge_type_text << endl;
+		cout << "çº¿è·¯ç¼–å·ä¸ºï¼š" << line_id << endl;
+		cout << "è¾¹éª‘è¡Œæ—¶é•¿ä¸ºï¼š" << bike_time_cost << endl;
 #endif	
 
 
@@ -853,47 +863,47 @@ bool load_edges(const string& file_path, vertex vertices[], int vertex_number, c
 		current_line_number++;
 	}
 
-	if (current_line_number == 1) {//ÒÀÈ»Í£ÁôÔÚ1£¬±íÊ¾Ö»ÓĞ±íÍ·Ã»ÓĞ¾ßÌå±ß
-		cout << "±ßCSVÖĞÃ»ÓĞÓĞĞ§±ßÊı¾İ" << endl;
+	if (current_line_number == 1) {//ä¾ç„¶åœç•™åœ¨1ï¼Œè¡¨ç¤ºåªæœ‰è¡¨å¤´æ²¡æœ‰å…·ä½“è¾¹
+		cout << "è¾¹CSVä¸­æ²¡æœ‰æœ‰æ•ˆè¾¹æ•°æ®" << endl;
 		return false;
 	}
-	edges_file.close();//¹ØÎÄ¼ş
+	edges_file.close();//å…³æ–‡ä»¶
 
 	return true;
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºdijkstra
-  ¹¦    ÄÜ£ºÍêÕûµÄdijkstraÁ÷³Ì
-  ÊäÈë²ÎÊı£ºvertex vertices[]£º¶¥µãÊı×é
-   int vertex_number£º¶¥µã¸öÊı
-   int start_vertex£ºÆğµã¶¥µãµÄÏÂ±ê
-   int k£ºÊ±¼ä+k¡Á·ÑÓÃÀïµÄ²ßÂÔ²ÎÊık
-   double distance[]£ºÍê³ÉdijkstraÁ÷³ÌÊ±Î¬»¤µÄ×î¶ÌÂ·¾¶³¤Êı×é
-   int previous_vertex[]£ºÍê³ÉdijkstraÁ÷³ÌÊ±Î¬»¤µÄÇ°ÇıÊı×é¶¥µã£¬¼ÇÂ¼Â·¾¶
-	const edge_node* previous_edge[]£º±£´æ×î¶ÌÂ·¾¶ÖĞµ½´ï¸÷¶¥µãÊµ¼Ê²ÉÓÃµÄ±ß
-   bool allow_bike = false£ºÊÇ·ñÔÊĞíÆï³µ£¬Ä¬ÈÏ²»ÔÊĞí
-  ·µ »Ø Öµ£º²ÎÊı²»ÔÚÕıÈ··¶Î§ÄÚ»ò¶Ñ²Ù×÷Ê§°Ü·µ»Øfalse£¬³É¹¦·µ»Øtrue
-  Ëµ    Ã÷£ºdistanceºÍprevious_vertexÊÇ½á¹ûÊı×é,ÎªĞèÒªĞŞ¸ÄµÄºËĞÄ±í¸ñ£¬º¯ÊıÄÚ²¿»á½øĞĞĞŞ¸Ä
-	ÓÉÓÚÍ¬Ò»Ì×¶¥µãÔÊĞí¶à´ÎÈë¶Ñ£¬²»²ÉÓÃvisitedÊı×éĞ´·¨bool visited[max_vertices] = {false}£¬
-	¶øÊÇÅĞ¶Ï¶ÑÀïµÄdistanceÔªËØÊÇ·ñÒÑ¸üĞÂÎªdistance½á¹ûÊı×éÀïµÄ×îĞ¡Öµ
+  å‡½æ•°åç§°ï¼šdijkstra
+  åŠŸ    èƒ½ï¼šå®Œæ•´çš„dijkstraæµç¨‹
+  è¾“å…¥å‚æ•°ï¼švertex vertices[]ï¼šé¡¶ç‚¹æ•°ç»„
+   int vertex_numberï¼šé¡¶ç‚¹ä¸ªæ•°
+   int start_vertexï¼šèµ·ç‚¹é¡¶ç‚¹çš„ä¸‹æ ‡
+   int kï¼šæ—¶é—´+kÃ—è´¹ç”¨é‡Œçš„ç­–ç•¥å‚æ•°k
+   double distance[]ï¼šå®Œæˆdijkstraæµç¨‹æ—¶ç»´æŠ¤çš„æœ€çŸ­è·¯å¾„é•¿æ•°ç»„
+   int previous_vertex[]ï¼šå®Œæˆdijkstraæµç¨‹æ—¶ç»´æŠ¤çš„å‰é©±æ•°ç»„é¡¶ç‚¹ï¼Œè®°å½•è·¯å¾„
+	const edge_node* previous_edge[]ï¼šä¿å­˜æœ€çŸ­è·¯å¾„ä¸­åˆ°è¾¾å„é¡¶ç‚¹å®é™…é‡‡ç”¨çš„è¾¹
+   bool allow_bike = falseï¼šæ˜¯å¦å…è®¸éª‘è½¦ï¼Œé»˜è®¤ä¸å…è®¸
+  è¿” å› å€¼ï¼šå‚æ•°ä¸åœ¨æ­£ç¡®èŒƒå›´å†…æˆ–å †æ“ä½œå¤±è´¥è¿”å›falseï¼ŒæˆåŠŸè¿”å›true
+  è¯´    æ˜ï¼šdistanceå’Œprevious_vertexæ˜¯ç»“æœæ•°ç»„,ä¸ºéœ€è¦ä¿®æ”¹çš„æ ¸å¿ƒè¡¨æ ¼ï¼Œå‡½æ•°å†…éƒ¨ä¼šè¿›è¡Œä¿®æ”¹
+	ç”±äºåŒä¸€å¥—é¡¶ç‚¹å…è®¸å¤šæ¬¡å…¥å †ï¼Œä¸é‡‡ç”¨visitedæ•°ç»„å†™æ³•bool visited[max_vertices] = {false}ï¼Œ
+	è€Œæ˜¯åˆ¤æ–­å †é‡Œçš„distanceå…ƒç´ æ˜¯å¦å·²æ›´æ–°ä¸ºdistanceç»“æœæ•°ç»„é‡Œçš„æœ€å°å€¼
 ***************************************************************************/
 bool dijkstra(vertex vertices[], int vertex_number, int start_vertex, int k, double distance[], int previous_vertex[],
 	const edge_node* previous_edge[], bool allow_bike = false)
 {
-	//·¶Î§¼ì²é
+	//èŒƒå›´æ£€æŸ¥
 	if (vertex_number <= 0 || vertex_number > max_vertices)
-		return false;//¶¥µãÊıÓ¦¸ÃÔÚ1..max_verticesÖ®¼ä
+		return false;//é¡¶ç‚¹æ•°åº”è¯¥åœ¨1..max_verticesä¹‹é—´
 	if (!is_valid_vertex_id(start_vertex, vertex_number))
-		return false;//¿ªÊ¼ÏÂ±êÓ¦¸ÃÔÚ0..vertex_number-1Ö®¼ä
+		return false;//å¼€å§‹ä¸‹æ ‡åº”è¯¥åœ¨0..vertex_number-1ä¹‹é—´
 	if (k < 0)
-		return false;//Dijkstra¶Ô¸ºÈ¨Í¼ÎŞĞ§
-	//³õÊ¼»¯Öµ
+		return false;//Dijkstraå¯¹è´Ÿæƒå›¾æ— æ•ˆ
+	//åˆå§‹åŒ–å€¼
 	for (int i = 0; i < vertex_number; i++)
 		distance[i] = std::numeric_limits<double>::infinity();
-	distance[start_vertex] = 0;//´ÓÆğµãµ½Æğµã¾àÀëÏÔÈ»Îª0£¬Æğµãµ½ÆäÓàÎªinf
+	distance[start_vertex] = 0;//ä»èµ·ç‚¹åˆ°èµ·ç‚¹è·ç¦»æ˜¾ç„¶ä¸º0ï¼Œèµ·ç‚¹åˆ°å…¶ä½™ä¸ºinf
 	for (int i = 0; i < vertex_number; i++) {
-		previous_vertex[i] = -1;//³õÊ¼»¯Îª-1£¬Ô¼¶¨-1´ú±íµ±Ç°»¹Ã»ÓĞÇ°Çı½Úµã
+		previous_vertex[i] = -1;//åˆå§‹åŒ–ä¸º-1ï¼Œçº¦å®š-1ä»£è¡¨å½“å‰è¿˜æ²¡æœ‰å‰é©±èŠ‚ç‚¹
 		previous_edge[i] = nullptr;
 	}
 		
@@ -902,30 +912,30 @@ bool dijkstra(vertex vertices[], int vertex_number, int start_vertex, int k, dou
 	if (!initialize_heap(heap, vertex_number))
 		return false;
 	if (!insert_heap(heap, start_vertex, distance[start_vertex])) {
-		release_heap(heap);//²åÈëÊ§°Ü£¬ÔòÊÍ·Å
+		release_heap(heap);//æ’å…¥å¤±è´¥ï¼Œåˆ™é‡Šæ”¾
 		return false;
 	}
 	while (!is_heap_empty(heap)) {
 		heap_node current_node;
 		if (!extract_min(heap, current_node)) {
-			release_heap(heap);//ÄÃ³ö¶Ñ¶¥×îĞ¡ÔªËØÊ§°Ü£¬ÔòÊÍ·Å
+			release_heap(heap);//æ‹¿å‡ºå †é¡¶æœ€å°å…ƒç´ å¤±è´¥ï¼Œåˆ™é‡Šæ”¾
 			return false;
 		}
 		int current_vertex = current_node.vertex_id;
 		if (current_node.distance > distance[current_vertex])
-			continue;//Èç¹ûµ¯³öµÄ¶Ñ¶¥¾àÀë±Èµ±Ç°¼ÇÂ¼µÄ¾àÀë´ó£¬ËµÃ÷Õâ¸ö¶¥µãÒÑ¾­±»¸üĞÂ¹ıÁË£¬Ö±½ÓÌø¹ı¾É¶Ñ£¬±ÜÃâÖØ¸´´¦Àí
+			continue;//å¦‚æœå¼¹å‡ºçš„å †é¡¶è·ç¦»æ¯”å½“å‰è®°å½•çš„è·ç¦»å¤§ï¼Œè¯´æ˜è¿™ä¸ªé¡¶ç‚¹å·²ç»è¢«æ›´æ–°è¿‡äº†ï¼Œç›´æ¥è·³è¿‡æ—§å †ï¼Œé¿å…é‡å¤å¤„ç†
 
-		edge_node* current_edge = vertices[current_vertex].first_edge;//µ±Ç°±ßÖ¸ÕëÖ¸Ïòµ±Ç°¶¥µãÁÚ½Ó±íµÄµÚÒ»Ìõ±ß
-		while (current_edge) {//Ö»Òªµ±Ç°¶¥µã»¹ÓĞÁÚ½Ó±ß£¬¾ÍÒ»Ö±±éÀú
-			int next_vertex = current_edge->to;//µ±Ç°ÁÚ½Ó±ßµÄÄ¿±ê¶¥µã±àºÅ
+		edge_node* current_edge = vertices[current_vertex].first_edge;//å½“å‰è¾¹æŒ‡é’ˆæŒ‡å‘å½“å‰é¡¶ç‚¹é‚»æ¥è¡¨çš„ç¬¬ä¸€æ¡è¾¹
+		while (current_edge) {//åªè¦å½“å‰é¡¶ç‚¹è¿˜æœ‰é‚»æ¥è¾¹ï¼Œå°±ä¸€ç›´éå†
+			int next_vertex = current_edge->to;//å½“å‰é‚»æ¥è¾¹çš„ç›®æ ‡é¡¶ç‚¹ç¼–å·
 
-			double candidate_distance = distance[current_vertex] + calculate_weight(*current_edge, k, allow_bike);//¼ÆËãµ±Ç°¶¥µãµ½ÁÚ½Ó¶¥µãµÄºòÑ¡¾àÀë
-			if (candidate_distance < distance[next_vertex]) {//Èç¹ûºòÑ¡¾àÀë±ÈÔ­À´µÄ¾àÀëĞ¡£¬¾Í¸üĞÂ
-				distance[next_vertex] = candidate_distance;//¸üĞÂdistanceÊı×é¼ÇÂ¼µÄ¾àÀë
-				previous_vertex[next_vertex] = current_vertex;//¸üĞÂÇ°ÇıÊı×é¼ÇÂ¼µÄÇ°Çı¶¥µã
+			double candidate_distance = distance[current_vertex] + calculate_weight(*current_edge, k, allow_bike);//è®¡ç®—å½“å‰é¡¶ç‚¹åˆ°é‚»æ¥é¡¶ç‚¹çš„å€™é€‰è·ç¦»
+			if (candidate_distance < distance[next_vertex]) {//å¦‚æœå€™é€‰è·ç¦»æ¯”åŸæ¥çš„è·ç¦»å°ï¼Œå°±æ›´æ–°
+				distance[next_vertex] = candidate_distance;//æ›´æ–°distanceæ•°ç»„è®°å½•çš„è·ç¦»
+				previous_vertex[next_vertex] = current_vertex;//æ›´æ–°å‰é©±æ•°ç»„è®°å½•çš„å‰é©±é¡¶ç‚¹
 				previous_edge[next_vertex] = current_edge;
-				if (!insert_heap(heap, next_vertex, distance[next_vertex])) {//°ÑÁÚ½Ó¶¥µã¼ÓÈë¶ÑÖĞ£¬µÈ´ıÏÂÒ»ÂÖµ¯³ö
-					release_heap(heap);//²åÈëÊ§°Ü£¬ÔòÊÍ·Å
+				if (!insert_heap(heap, next_vertex, distance[next_vertex])) {//æŠŠé‚»æ¥é¡¶ç‚¹åŠ å…¥å †ä¸­ï¼Œç­‰å¾…ä¸‹ä¸€è½®å¼¹å‡º
+					release_heap(heap);//æ’å…¥å¤±è´¥ï¼Œåˆ™é‡Šæ”¾
 					return false;
 				}
 			}
@@ -939,51 +949,51 @@ bool dijkstra(vertex vertices[], int vertex_number, int start_vertex, int k, dou
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºbuild_paths
-  ¹¦    ÄÜ£º½¨Á¢pathsÊı×é£¬´æ´¢×î¶ÌÂ·¾¶Õû¸ö¹ı³Ì¾­¹ıÄÄĞ©¶¥µã
-  ÊäÈë²ÎÊı£ºconst int previous_vertex[]£ºÇ°ÇıÊı×é
-	int vertex_number£º×Ü¶¥µãÊı£¬ÓÃÓÚ·¶Î§¼ì²éºÍ·ÀÖ¹Òì³£Ñ­»·
-	int start_vertex£ºÆğµã¶¥µãĞòºÅ£»
-	int end_vertex£ºÖÕµã¶¥µãĞòºÅ£»
-	int path[]£ºÊä³öÂ·¾¶Êı×é£»
-	int& path_vertex_number£ºÂ·¾¶×Ü³¤¶È£¬È·¶¨Êı×é±ß½ç
-  ·µ »Ø Öµ£ºfalse±íÊ¾Ê§°Ü£¬true±íÊ¾³É¹¦
-  Ëµ    Ã÷£ºpath[]Îª·´ÏòÊı×é
+  å‡½æ•°åç§°ï¼šbuild_paths
+  åŠŸ    èƒ½ï¼šå»ºç«‹pathsæ•°ç»„ï¼Œå­˜å‚¨æœ€çŸ­è·¯å¾„æ•´ä¸ªè¿‡ç¨‹ç»è¿‡å“ªäº›é¡¶ç‚¹
+  è¾“å…¥å‚æ•°ï¼šconst int previous_vertex[]ï¼šå‰é©±æ•°ç»„
+	int vertex_numberï¼šæ€»é¡¶ç‚¹æ•°ï¼Œç”¨äºèŒƒå›´æ£€æŸ¥å’Œé˜²æ­¢å¼‚å¸¸å¾ªç¯
+	int start_vertexï¼šèµ·ç‚¹é¡¶ç‚¹åºå·ï¼›
+	int end_vertexï¼šç»ˆç‚¹é¡¶ç‚¹åºå·ï¼›
+	int path[]ï¼šè¾“å‡ºè·¯å¾„æ•°ç»„ï¼›
+	int& path_vertex_numberï¼šè·¯å¾„æ€»é•¿åº¦ï¼Œç¡®å®šæ•°ç»„è¾¹ç•Œ
+  è¿” å› å€¼ï¼šfalseè¡¨ç¤ºå¤±è´¥ï¼Œtrueè¡¨ç¤ºæˆåŠŸ
+  è¯´    æ˜ï¼špath[]ä¸ºåå‘æ•°ç»„
 ***************************************************************************/
 bool build_paths(const int previous_vertex[], int vertex_number, int start_vertex, int end_vertex, int path[], int& path_vertex_number)
 {
-	//·¶Î§¼ì²é
+	//èŒƒå›´æ£€æŸ¥
 	if (vertex_number <= 0 || vertex_number > max_vertices)
-		return false;//¶¥µãÊıÓ¦¸ÃÔÚ1..max_verticesÖ®¼ä
+		return false;//é¡¶ç‚¹æ•°åº”è¯¥åœ¨1..max_verticesä¹‹é—´
 	if (!(is_valid_vertex_id(start_vertex, vertex_number) && is_valid_vertex_id(end_vertex, vertex_number)))
-		return false;//Æğµã¡¢ÖÕµãÏÂ±ê¶¼Ó¦¸ÃÔÚ0..vertex_number-1Ö®¼ä
+		return false;//èµ·ç‚¹ã€ç»ˆç‚¹ä¸‹æ ‡éƒ½åº”è¯¥åœ¨0..vertex_number-1ä¹‹é—´
 
-	path_vertex_number = 0;//²»ÒÀÀµ´«ÈëµÄÖµ£¬ÖØÖÃÎª0£¬ÒòÎªÓÃµÄÒıÓÃËùÒÔÎŞ·¨ÉèÖÃº¯ÊıÄ¬ÈÏ²ÎÊı
+	path_vertex_number = 0;//ä¸ä¾èµ–ä¼ å…¥çš„å€¼ï¼Œé‡ç½®ä¸º0ï¼Œå› ä¸ºç”¨çš„å¼•ç”¨æ‰€ä»¥æ— æ³•è®¾ç½®å‡½æ•°é»˜è®¤å‚æ•°
 	int current_vertex = end_vertex;
-	while (path_vertex_number < vertex_number) {//Èô´óÓÚµÈÓÚvertex_number¸ù¾İ¸ë³²Ô­ÀíÒ»¶¨ÓĞÖØ¸´¶¥µã³öÏÖ£¬ÔòÓĞ»·
-		if (!is_valid_vertex_id(current_vertex, vertex_number)) {//²»¿É´ï£¬Õı³£Çé¿öÏÂÕâÖÖÇé¿öcurrent_vertexÎª-1
+	while (path_vertex_number < vertex_number) {//è‹¥å¤§äºç­‰äºvertex_numberæ ¹æ®é¸½å·¢åŸç†ä¸€å®šæœ‰é‡å¤é¡¶ç‚¹å‡ºç°ï¼Œåˆ™æœ‰ç¯
+		if (!is_valid_vertex_id(current_vertex, vertex_number)) {//ä¸å¯è¾¾ï¼Œæ­£å¸¸æƒ…å†µä¸‹è¿™ç§æƒ…å†µcurrent_vertexä¸º-1
 			path_vertex_number = 0;
 			return false;
 		}
 		path[path_vertex_number] = current_vertex;
 		path_vertex_number++;
 		if (current_vertex == start_vertex)
-			return true;//ÕÒµ½ÆğµãÔò·µ»Øtrue£¬×¢Òâ´Ë´¦µÈºÅ×ó±ß²»ÄÜÓÃpath[path_vertex_number]£¬ÒòÎªpath_vertex_numberÒÑ¾­×ÔÔö
+			return true;//æ‰¾åˆ°èµ·ç‚¹åˆ™è¿”å›trueï¼Œæ³¨æ„æ­¤å¤„ç­‰å·å·¦è¾¹ä¸èƒ½ç”¨path[path_vertex_number]ï¼Œå› ä¸ºpath_vertex_numberå·²ç»è‡ªå¢
 
-		current_vertex = previous_vertex[current_vertex];//¸üĞÂcurrent_vertexÎªËüµÄÇ°Çı½Úµã
+		current_vertex = previous_vertex[current_vertex];//æ›´æ–°current_vertexä¸ºå®ƒçš„å‰é©±èŠ‚ç‚¹
 
 	}
-	//²»Âú×ãpath_vertex_number<vertex_number£¬ËµÃ÷²»Õı³£
+	//ä¸æ»¡è¶³path_vertex_number<vertex_numberï¼Œè¯´æ˜ä¸æ­£å¸¸
 	path_vertex_number = 0;
 	return false;
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºfind_directed_edge
-  ¹¦    ÄÜ£ºÕÒÓĞÏò±ß
-  ÊäÈë²ÎÊı£ºconst vertex & from_vertex£ºÆğµã¶¥µã£¬int to£ºÄ¿±ê¶¥µã±àºÅ
-  ·µ »Ø Öµ£ºconst edge_node*£¬·µ»ØÕÒµ½µÄ±ß
-  Ëµ    Ã÷£º´òÓ¡Ê±ĞèÒª¾ßÌåÂ·¾¶
+  å‡½æ•°åç§°ï¼šfind_directed_edge
+  åŠŸ    èƒ½ï¼šæ‰¾æœ‰å‘è¾¹
+  è¾“å…¥å‚æ•°ï¼šconst vertex & from_vertexï¼šèµ·ç‚¹é¡¶ç‚¹ï¼Œint toï¼šç›®æ ‡é¡¶ç‚¹ç¼–å·
+  è¿” å› å€¼ï¼šconst edge_node*ï¼Œè¿”å›æ‰¾åˆ°çš„è¾¹
+  è¯´    æ˜ï¼šæ‰“å°æ—¶éœ€è¦å…·ä½“è·¯å¾„
 ***************************************************************************/
 const edge_node* find_directed_edge(const vertex& from_vertex, int to)
 {
@@ -993,21 +1003,21 @@ const edge_node* find_directed_edge(const vertex& from_vertex, int to)
 			return current_edge;
 		current_edge = current_edge->next;
 	}
-	return nullptr;//±éÀúºóÃ»ÕÒµ½ÕâÌõ±ß
+	return nullptr;//éå†åæ²¡æ‰¾åˆ°è¿™æ¡è¾¹
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºoutput_route_guide
-  ¹¦    ÄÜ£º´òÓ¡Â·¾¶£¬Ä¿Ç°outputÃüÃûµÄÏÈÖ»cout³ÊÏÖ
-  ÊäÈë²ÎÊı£ºconst vertex vertices[]£º¶¥µãÊı×é
-  const int path[]£ºÊä³öÂ·¾¶Êı×é
-  const int path_vertex_number£ºÂ·¾¶×Ü³¤¶È
-  const edge_node* previous_edge[]£ºDijkstraÊµ¼ÊÑ¡ÖĞµÄÇ°Çı±ßÊı×é
-  bool allow_bike£ºÔÊĞíÆïĞĞ
-  const transit_line lines[]£ºÏßÂ·Êı×é
-  const int line_number£ºÏßÂ·ÊıÁ¿
-  ·µ »Ø Öµ£ºÕÒ²»µ½¹ı³Ì±ß·µ»Øfalse£¬Â·ÏßÕıÈ··µ»Øtrue
-  Ëµ    Ã÷£ºpath[]Îª·´ÏòÊı×é£¬¹Ê·´Ïò±éÀú´òÓ¡
+  å‡½æ•°åç§°ï¼šoutput_route_guide
+  åŠŸ    èƒ½ï¼šæ‰“å°è·¯å¾„ï¼Œç›®å‰outputå‘½åçš„å…ˆåªcoutå‘ˆç°
+  è¾“å…¥å‚æ•°ï¼šconst vertex vertices[]ï¼šé¡¶ç‚¹æ•°ç»„
+  const int path[]ï¼šè¾“å‡ºè·¯å¾„æ•°ç»„
+  const int path_vertex_numberï¼šè·¯å¾„æ€»é•¿åº¦
+  const edge_node* previous_edge[]ï¼šDijkstraå®é™…é€‰ä¸­çš„å‰é©±è¾¹æ•°ç»„
+  bool allow_bikeï¼šå…è®¸éª‘è¡Œ
+  const transit_line lines[]ï¼šçº¿è·¯æ•°ç»„
+  const int line_numberï¼šçº¿è·¯æ•°é‡
+  è¿” å› å€¼ï¼šæ‰¾ä¸åˆ°è¿‡ç¨‹è¾¹è¿”å›falseï¼Œè·¯çº¿æ­£ç¡®è¿”å›true
+  è¯´    æ˜ï¼špath[]ä¸ºåå‘æ•°ç»„ï¼Œæ•…åå‘éå†æ‰“å°
 ***************************************************************************/
 bool output_route_guide(const vertex vertices[],
 	const int path[],
@@ -1017,46 +1027,46 @@ bool output_route_guide(const vertex vertices[],
 	const transit_line lines[],
 	const int line_number)
 {
-	cout << "ÍÆ¼öÂ·Ïß£º";
+	cout << "æ¨èè·¯çº¿ï¼š";
 	for (int i = path_vertex_number - 1; i >= 0; i--)
-		cout << vertices[path[i]].name << (i ? " -> " : "");//iÎª0µÄÊ±ºòËµÃ÷µ½ÖÕµãÁË£¬²»Êä³ö·Ö¸ô·û£¬ÆäÓàÊ±¼ä->Á¬½Ó
+		cout << vertices[path[i]].name << (i ? " -> " : "");//iä¸º0çš„æ—¶å€™è¯´æ˜åˆ°ç»ˆç‚¹äº†ï¼Œä¸è¾“å‡ºåˆ†éš”ç¬¦ï¼Œå…¶ä½™æ—¶é—´->è¿æ¥
 	cout << endl;
 
-	cout << "ÏêÏ¸Â·Ïß£º" << endl;
+	cout << "è¯¦ç»†è·¯çº¿ï¼š" << endl;
 	int segment_number = 1;
 	while (segment_number < path_vertex_number) {
 		int start_position = path_vertex_number - segment_number;
-		int from_vertex_id = path[start_position];//Æğµã¶¥µã±àºÅ
+		int from_vertex_id = path[start_position];//èµ·ç‚¹é¡¶ç‚¹ç¼–å·
 		int end_position = start_position - 1;
-		int to_vertex_id = path[end_position];//ÖÕµã¶¥µã±àºÅ
+		int to_vertex_id = path[end_position];//ç»ˆç‚¹é¡¶ç‚¹ç¼–å·
 		const edge_node* current_edge = previous_edge[to_vertex_id];
 		if (!current_edge) {
-			cout << "Â·ÏßÊı¾İ´íÎó" << endl;
+			cout << "è·¯çº¿æ•°æ®é”™è¯¯" << endl;
 			return false;
 		}
 		int time_cost = get_effective_time_cost(*current_edge, allow_bike);
-		double fare_cost = current_edge->fare_cost;//×¢Òâfare_costÀàĞÍÎªdouble
+		double fare_cost = current_edge->fare_cost;//æ³¨æ„fare_costç±»å‹ä¸ºdouble
 		string type_way_in_chinese = "";
 		switch (current_edge->type)
 		{
 			case edge_type::METRO:
 			case edge_type::BUS:
-				if (current_edge->line_id < 0 || current_edge->line_id >= line_number) {//Ö»ÓĞµØÌú/¹«½»²Å¼ì²é·¶Î§
-					cout << "Â·Ïß±àºÅ·¶Î§´íÎó" << endl;
+				if (current_edge->line_id < 0 || current_edge->line_id >= line_number) {//åªæœ‰åœ°é“/å…¬äº¤æ‰æ£€æŸ¥èŒƒå›´
+					cout << "è·¯çº¿ç¼–å·èŒƒå›´é”™è¯¯" << endl;
 					return false;
 				}
-				type_way_in_chinese = "³Ë×ø" + lines[current_edge->line_id].name;
+				type_way_in_chinese = "ä¹˜å" + lines[current_edge->line_id].name;
 				break;
 			case edge_type::TRANSFER:
 				if (time_cost < current_edge->time_cost)
-					type_way_in_chinese = "ÆïĞĞ";
-				else //Õı³£Çé¿öÏÂ´Ë´¦time_cost == current_edge->time_cost
-					type_way_in_chinese = "²½ĞĞ";
+					type_way_in_chinese = "éª‘è¡Œ";
+				else //æ­£å¸¸æƒ…å†µä¸‹æ­¤å¤„time_cost == current_edge->time_cost
+					type_way_in_chinese = "æ­¥è¡Œ";
 				break;
 		}
 
-		cout << "µÚ" << segment_number << "¶Î£º´Ó" << vertices[from_vertex_id].name << type_way_in_chinese << "Ç°Íù"
-			<< vertices[to_vertex_id].name << "£¬ºÄÊ±" << time_cost << "·ÖÖÓ£¬·ÑÓÃ" << fare_cost << "Ôª¡£" << endl;
+		cout << "ç¬¬" << segment_number << "æ®µï¼šä»" << vertices[from_vertex_id].name << type_way_in_chinese << "å‰å¾€"
+			<< vertices[to_vertex_id].name << "ï¼Œè€—æ—¶" << time_cost << "åˆ†é’Ÿï¼Œè´¹ç”¨" << fare_cost << "å…ƒã€‚" << endl;
 		segment_number++;
 	}
 	return true;
@@ -1064,29 +1074,29 @@ bool output_route_guide(const vertex vertices[],
 
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºcalculate_path_statistics
-  ¹¦    ÄÜ£ºÍ³¼ÆÂ·¾¶×ÜÊ±¼ä¡¢×Ü·ÑÓÃ£¬½á¹û·Ö±ğ´æ·ÅÔÚÒıÓÃ±äÁ¿int& total_time_costºÍdouble& total_fare_costÖĞ
-  ÊäÈë²ÎÊı£ºconst vertex vertices[]£º¶¥µãÊı×é
-  const int path[]£ºÂ·¾¶µ¹ĞòÊı×é
-  int path_vertex_number£ºÂ·¾¶ÊıÁ¿
-  int& total_time_cost£º´æ·Å½á¹ûµÄ×ÜºÄÊ±
-  double& total_fare_cost£º´æ·Å½á¹ûµÄ×Ü·ÑÓÃ
-  bool allow_bike = false£ºÊÇ·ñÔÊĞíÆïĞĞ£¬Ä¬ÈÏfalse
-  ·µ »Ø Öµ£º³É¹¦Îªtrue£¬ÕÒ²»µ½Â·¾¶ÖĞµÄ±ßÔòÎªfalse
-  Ëµ    Ã÷£ºfind_directed_edge·µ»Ø±ßÖ¸Õë£»µ÷ÓÃget_effective_time_costº¯ÊıÊ±ĞèÒª½âÒıÓÃ¸ÃÖ¸Õë
+  å‡½æ•°åç§°ï¼šcalculate_path_statistics
+  åŠŸ    èƒ½ï¼šç»Ÿè®¡è·¯å¾„æ€»æ—¶é—´ã€æ€»è´¹ç”¨ï¼Œç»“æœåˆ†åˆ«å­˜æ”¾åœ¨å¼•ç”¨å˜é‡int& total_time_costå’Œdouble& total_fare_costä¸­
+  è¾“å…¥å‚æ•°ï¼šconst vertex vertices[]ï¼šé¡¶ç‚¹æ•°ç»„
+  const int path[]ï¼šè·¯å¾„å€’åºæ•°ç»„
+  int path_vertex_numberï¼šè·¯å¾„æ•°é‡
+  int& total_time_costï¼šå­˜æ”¾ç»“æœçš„æ€»è€—æ—¶
+  double& total_fare_costï¼šå­˜æ”¾ç»“æœçš„æ€»è´¹ç”¨
+  bool allow_bike = falseï¼šæ˜¯å¦å…è®¸éª‘è¡Œï¼Œé»˜è®¤false
+  è¿” å› å€¼ï¼šæˆåŠŸä¸ºtrueï¼Œæ‰¾ä¸åˆ°è·¯å¾„ä¸­çš„è¾¹åˆ™ä¸ºfalse
+  è¯´    æ˜ï¼šfind_directed_edgeè¿”å›è¾¹æŒ‡é’ˆï¼›è°ƒç”¨get_effective_time_costå‡½æ•°æ—¶éœ€è¦è§£å¼•ç”¨è¯¥æŒ‡é’ˆ
 ***************************************************************************/
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºcalculate_path_statistics
-  ¹¦    ÄÜ£º¸ù¾İDijkstraÊµ¼Ê²ÉÓÃµÄÇ°Çı±ßÍ³¼ÆÂ·¾¶×ÜÊ±¼äºÍ×Ü·ÑÓÃ
-  ÊäÈë²ÎÊı£ºconst int path[]£ºÂ·¾¶µ¹ĞòÊı×é
-  int path_vertex_number£ºÂ·¾¶ÖĞµÄ¶¥µãÊıÁ¿
-  const edge_node* previous_edge[]£ºDijkstra±£´æµÄ¸÷¶¥µãÊµ¼ÊÇ°Çı±ß
-  int& total_time_cost£º´æ·Å×ÜºÄÊ±
-  double& total_fare_cost£º´æ·Å×Ü·ÑÓÃ
-  bool allow_bike£ºÊÇ·ñÔÊĞíÆïĞĞ£¬Ä¬ÈÏfalse
-  ·µ »Ø Öµ£ºÍ³¼Æ³É¹¦·µ»Øtrue£¬Â·¾¶ÖĞµÄÇ°Çı±ßÎŞĞ§·µ»Øfalse
-  Ëµ    Ã÷£ºpath[]°´ÕÕÖÕµãµ½Æğµãµ¹Ğò±£´æ£»¶ÔÓÚÏàÁÚµÄpath[i]ºÍpath[i-1]£¬
-  µ½´ïpath[i-1]ËùÊµ¼Ê²ÉÓÃµÄ±ß¾ÍÊÇprevious_edge[path[i-1]]
+  å‡½æ•°åç§°ï¼šcalculate_path_statistics
+  åŠŸ    èƒ½ï¼šæ ¹æ®Dijkstraå®é™…é‡‡ç”¨çš„å‰é©±è¾¹ç»Ÿè®¡è·¯å¾„æ€»æ—¶é—´å’Œæ€»è´¹ç”¨
+  è¾“å…¥å‚æ•°ï¼šconst int path[]ï¼šè·¯å¾„å€’åºæ•°ç»„
+  int path_vertex_numberï¼šè·¯å¾„ä¸­çš„é¡¶ç‚¹æ•°é‡
+  const edge_node* previous_edge[]ï¼šDijkstraä¿å­˜çš„å„é¡¶ç‚¹å®é™…å‰é©±è¾¹
+  int& total_time_costï¼šå­˜æ”¾æ€»è€—æ—¶
+  double& total_fare_costï¼šå­˜æ”¾æ€»è´¹ç”¨
+  bool allow_bikeï¼šæ˜¯å¦å…è®¸éª‘è¡Œï¼Œé»˜è®¤false
+  è¿” å› å€¼ï¼šç»Ÿè®¡æˆåŠŸè¿”å›trueï¼Œè·¯å¾„ä¸­çš„å‰é©±è¾¹æ— æ•ˆè¿”å›false
+  è¯´    æ˜ï¼špath[]æŒ‰ç…§ç»ˆç‚¹åˆ°èµ·ç‚¹å€’åºä¿å­˜ï¼›å¯¹äºç›¸é‚»çš„path[i]å’Œpath[i-1]ï¼Œ
+  åˆ°è¾¾path[i-1]æ‰€å®é™…é‡‡ç”¨çš„è¾¹å°±æ˜¯previous_edge[path[i-1]]
 ***************************************************************************/
 bool calculate_path_statistics(const int path[],
 	int path_vertex_number,
@@ -1112,16 +1122,16 @@ bool calculate_path_statistics(const int path[],
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºcalculate_arrival_time
-  ¹¦    ÄÜ£º¸ù¾İ¿ªÊ¼Ê±¼äºÍÂ·³ÌÊ±¼ä¼ÆËãµ½´ïÊ±¼ä
-  ÊäÈë²ÎÊı£ºint start_hour£º³ö·¢Ğ¡Ê±£¨0-23£©
-	int start_minute£º³ö·¢·ÖÖÓ£¨0-59£©
-	int total_minutes£ºÂ·Ïß×Ü·ÖÖÓÊı£¨>=0£©
-	int& arrival_hour£ºµ½´ïĞ¡Ê±
-	int& arrival_minute£ºµ½´ï·ÖÖÓ
-	int& days_passed£º¿ç¹ıµÄÌìÊı
-  ·µ »Ø Öµ£º²ÎÊı·ûºÏ·¶Î§Îªtrue£¬²»·ûºÏ·¶Î§ÔòÎªfalse
-  Ëµ    Ã÷£ººóÈı¸ö²ÎÊıÎªÊä³ö²ÎÊı£¬¹ÊÊ¹ÓÃÒıÓÃ
+  å‡½æ•°åç§°ï¼šcalculate_arrival_time
+  åŠŸ    èƒ½ï¼šæ ¹æ®å¼€å§‹æ—¶é—´å’Œè·¯ç¨‹æ—¶é—´è®¡ç®—åˆ°è¾¾æ—¶é—´
+  è¾“å…¥å‚æ•°ï¼šint start_hourï¼šå‡ºå‘å°æ—¶ï¼ˆ0-23ï¼‰
+	int start_minuteï¼šå‡ºå‘åˆ†é’Ÿï¼ˆ0-59ï¼‰
+	int total_minutesï¼šè·¯çº¿æ€»åˆ†é’Ÿæ•°ï¼ˆ>=0ï¼‰
+	int& arrival_hourï¼šåˆ°è¾¾å°æ—¶
+	int& arrival_minuteï¼šåˆ°è¾¾åˆ†é’Ÿ
+	int& days_passedï¼šè·¨è¿‡çš„å¤©æ•°
+  è¿” å› å€¼ï¼šå‚æ•°ç¬¦åˆèŒƒå›´ä¸ºtrueï¼Œä¸ç¬¦åˆèŒƒå›´åˆ™ä¸ºfalse
+  è¯´    æ˜ï¼šåä¸‰ä¸ªå‚æ•°ä¸ºè¾“å‡ºå‚æ•°ï¼Œæ•…ä½¿ç”¨å¼•ç”¨
 ***************************************************************************/
 bool calculate_arrival_time(int start_hour, int start_minute, int total_minutes,
 	int& arrival_hour, int& arrival_minute, int& days_passed)
@@ -1137,19 +1147,19 @@ bool calculate_arrival_time(int start_hour, int start_minute, int total_minutes,
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºdraw_all_edges
-  ¹¦    ÄÜ£ºÔÚEasyX´°¿ÚÖĞ»æÖÆµ±Ç°ÁÚ½Ó±íÀïµÄÈ«²¿ÎŞÏò±ß
-  ÊäÈë²ÎÊı£ºconst vertex vertices[]£º¶¥µãÊı×é
-  int vertex_number£º¶¥µãÊıÁ¿
-  ·µ »Ø Öµ£ºÎŞ
-  Ëµ    Ã÷£ºÎŞÏò±ßÔÚÁÚ½Ó±íÖĞ±£´æÁ½¸ö·½Ïò£¬Ö»ÔÚµ±Ç°¶¥µã±àºÅĞ¡ÓÚÄ¿±ê¶¥µã±àºÅÊ±»æÖÆ£¬±ÜÃâÖØ¸´»æÖÆ
+  å‡½æ•°åç§°ï¼šdraw_all_edges
+  åŠŸ    èƒ½ï¼šåœ¨EasyXçª—å£ä¸­ç»˜åˆ¶å½“å‰é‚»æ¥è¡¨é‡Œçš„å…¨éƒ¨æ— å‘è¾¹
+  è¾“å…¥å‚æ•°ï¼šconst vertex vertices[]ï¼šé¡¶ç‚¹æ•°ç»„
+  int vertex_numberï¼šé¡¶ç‚¹æ•°é‡
+  è¿” å› å€¼ï¼šæ— 
+  è¯´    æ˜ï¼šæ— å‘è¾¹åœ¨é‚»æ¥è¡¨ä¸­ä¿å­˜ä¸¤ä¸ªæ–¹å‘ï¼Œåªåœ¨å½“å‰é¡¶ç‚¹ç¼–å·å°äºç›®æ ‡é¡¶ç‚¹ç¼–å·æ—¶ç»˜åˆ¶ï¼Œé¿å…é‡å¤ç»˜åˆ¶
 ***************************************************************************/
 void draw_all_edges(const vertex vertices[], int vertex_number)
 {
 	for (int i = 0; i < vertex_number; i++) {
 		const edge_node* current_edge = vertices[i].first_edge;
 		while (current_edge) {
-			if (i < current_edge->to) {//ÎŞÏò±ßÖ»´¦Àí±àºÅ½ÏĞ¡µÄÒ»¶Ë£¬·ÀÖ¹ÖØ¸´´¦Àí
+			if (i < current_edge->to) {//æ— å‘è¾¹åªå¤„ç†ç¼–å·è¾ƒå°çš„ä¸€ç«¯ï¼Œé˜²æ­¢é‡å¤å¤„ç†
 				if (current_edge->type == edge_type::TRANSFER) {
 					setlinecolor(RGB(135, 145, 153));
 					setlinestyle(PS_DASH, 1);
@@ -1192,12 +1202,12 @@ void draw_all_edges(const vertex vertices[], int vertex_number)
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºdraw_all_vertices
-  ¹¦    ÄÜ£ºÔÚEasyX´°¿ÚÖĞ»æÖÆÈ«²¿Õ¾µãÔ²È¦
-  ÊäÈë²ÎÊı£ºconst vertex vertices[]£º¶¥µãÊı×é
-  int vertex_number£º¶¥µãÊıÁ¿
-  ·µ »Ø Öµ£ºÎŞ
-  Ëµ    Ã÷£ºµØÌúÕ¾Ê¹ÓÃÀ¶É«±ß¿ò£¬¹«½»/µØµã½ÚµãÊ¹ÓÃ³ÈÉ«±ß¿ò£»±¾½×¶ÎÔİ²»»æÖÆÕ¾Ãû
+  å‡½æ•°åç§°ï¼šdraw_all_vertices
+  åŠŸ    èƒ½ï¼šåœ¨EasyXçª—å£ä¸­ç»˜åˆ¶å…¨éƒ¨ç«™ç‚¹åœ†åœˆ
+  è¾“å…¥å‚æ•°ï¼šconst vertex vertices[]ï¼šé¡¶ç‚¹æ•°ç»„
+  int vertex_numberï¼šé¡¶ç‚¹æ•°é‡
+  è¿” å› å€¼ï¼šæ— 
+  è¯´    æ˜ï¼šåœ°é“ç«™ä½¿ç”¨è“è‰²è¾¹æ¡†ï¼Œå…¬äº¤/åœ°ç‚¹èŠ‚ç‚¹ä½¿ç”¨æ©™è‰²è¾¹æ¡†ï¼›æœ¬é˜¶æ®µæš‚ä¸ç»˜åˆ¶ç«™å
 ***************************************************************************/
 void draw_all_vertices(const vertex vertices[], int vertex_number)
 {
@@ -1220,14 +1230,14 @@ void draw_all_vertices(const vertex vertices[], int vertex_number)
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºfind_clicked_vertex
-  ¹¦    ÄÜ£º¸ù¾İÊó±êµã»÷Î»ÖÃÅĞ¶ÏÊÇ·ñÑ¡ÖĞÁËÄ³¸öÕ¾µã
-  ÊäÈë²ÎÊı£ºconst vertex vertices[]£º¶¥µãÊı×é
-  int vertex_number£º¶¥µãÊıÁ¿
-  int mouse_x£ºÊó±êµã»÷Î»ÖÃµÄx×ø±ê
-  int mouse_y£ºÊó±êµã»÷Î»ÖÃµÄy×ø±ê
-  ·µ »Ø Öµ£ºÃüÖĞÕ¾µã·µ»Ø¶ÔÓ¦¶¥µãÏÂ±ê£¬Î´ÃüÖĞÈÎºÎÕ¾µã·µ»Ø-1
-  Ëµ    Ã÷£ºÕ¾µãÏÔÊ¾°ë¾¶Îª5£¬µã»÷ÅĞ¶¨°ë¾¶Ê¹ÓÃ10ÒÔÌá¸ßÊó±ê²Ù×÷Èİ´íĞÔ
+  å‡½æ•°åç§°ï¼šfind_clicked_vertex
+  åŠŸ    èƒ½ï¼šæ ¹æ®é¼ æ ‡ç‚¹å‡»ä½ç½®åˆ¤æ–­æ˜¯å¦é€‰ä¸­äº†æŸä¸ªç«™ç‚¹
+  è¾“å…¥å‚æ•°ï¼šconst vertex vertices[]ï¼šé¡¶ç‚¹æ•°ç»„
+  int vertex_numberï¼šé¡¶ç‚¹æ•°é‡
+  int mouse_xï¼šé¼ æ ‡ç‚¹å‡»ä½ç½®çš„xåæ ‡
+  int mouse_yï¼šé¼ æ ‡ç‚¹å‡»ä½ç½®çš„yåæ ‡
+  è¿” å› å€¼ï¼šå‘½ä¸­ç«™ç‚¹è¿”å›å¯¹åº”é¡¶ç‚¹ä¸‹æ ‡ï¼Œæœªå‘½ä¸­ä»»ä½•ç«™ç‚¹è¿”å›-1
+  è¯´    æ˜ï¼šç«™ç‚¹æ˜¾ç¤ºåŠå¾„ä¸º5ï¼Œç‚¹å‡»åˆ¤å®šåŠå¾„ä½¿ç”¨10ä»¥æé«˜é¼ æ ‡æ“ä½œå®¹é”™æ€§
 ***************************************************************************/
 int find_clicked_vertex(const vertex vertices[], int vertex_number,
 	int mouse_x, int mouse_y)
@@ -1250,16 +1260,258 @@ int find_clicked_vertex(const vertex vertices[], int vertex_number,
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºis_point_in_rectangle
-  ¹¦    ÄÜ£ºÅĞ¶ÏÖ¸¶¨×ø±êÊÇ·ñÎ»ÓÚÒ»¸ö¾ØĞÎÇøÓòÄÚ²¿
-  ÊäÈë²ÎÊı£ºint point_x£ºĞèÒªÅĞ¶ÏµÄµãµÄx×ø±ê
-  int point_y£ºĞèÒªÅĞ¶ÏµÄµãµÄy×ø±ê
-  int left£º¾ØĞÎ×ó±ß½ç
-  int top£º¾ØĞÎÉÏ±ß½ç
-  int right£º¾ØĞÎÓÒ±ß½ç
-  int bottom£º¾ØĞÎÏÂ±ß½ç
-  ·µ »Ø Öµ£ºÎ»ÓÚ¾ØĞÎÄÚ²¿·µ»Øtrue£¬·ñÔò·µ»Øfalse
-  Ëµ    Ã÷£ºEasyXÆÁÄ»×ø±êÏµÔ­µãÎ»ÓÚ×óÉÏ½Ç£¬xÏòÓÒÔö´ó£¬yÏòÏÂÔö´ó
+  å‡½æ•°åç§°ï¼šfind_jiading_map_node
+  åŠŸ    èƒ½ï¼šæ ¹æ®å›¾é¡¶ç‚¹ç¼–å·æŸ¥æ‰¾å¯¹åº”çš„å˜‰å®šå±€éƒ¨å›¾èŠ‚ç‚¹
+  è¾“å…¥å‚æ•°ï¼šconst vertex vertices[]ï¼šæ€»å›¾é¡¶ç‚¹æ•°ç»„
+  const jiading_map_node map_nodes[]ï¼šå˜‰å®šå±€éƒ¨å›¾èŠ‚ç‚¹æ•°ç»„
+  int map_node_numberï¼šå˜‰å®šå±€éƒ¨å›¾èŠ‚ç‚¹æ•°é‡
+  int vertex_idï¼šéœ€è¦æŸ¥æ‰¾çš„å›¾é¡¶ç‚¹ç¼–å·
+  è¿” å› å€¼ï¼šæ‰¾åˆ°æ—¶è¿”å›å¯¹åº”jiading_map_nodeåœ°å€ï¼Œå¦åˆ™è¿”å›nullptr
+  è¯´    æ˜ï¼šå¯¹äº56ï½63å·ç‰©ç†èŠ‚ç‚¹ç›´æ¥æŒ‰vertex_idæŸ¥æ‰¾ï¼›å¯¹äºå…¬äº¤è™šæ‹ŸçŠ¶æ€èŠ‚ç‚¹ï¼Œ
+  æ ¹æ®å…¶ä¸ç‰©ç†èŠ‚ç‚¹ç›¸åŒçš„åç§°å’Œæ€»è§ˆåæ ‡æ˜ å°„å›å¯¹åº”ç‰©ç†èŠ‚ç‚¹
+***************************************************************************/
+const jiading_map_node* find_jiading_map_node(
+	const vertex vertices[],
+	const jiading_map_node map_nodes[],
+	int map_node_number,
+	int vertex_id)
+{
+	if (vertex_id < 0 || vertex_id >= max_vertices)
+		return nullptr;
+
+	//å…ˆå¤„ç†ç‰©ç†èŠ‚ç‚¹æœ¬èº«
+	for (int i = 0; i < map_node_number; i++) {
+		if (map_nodes[i].vertex_id == vertex_id)
+			return &map_nodes[i];
+	}
+
+	//å†å¤„ç†å…¬äº¤è™šæ‹ŸçŠ¶æ€èŠ‚ç‚¹
+	if (vertex_id >= physical_vertex_number) {
+
+		for (int i = 0; i < map_node_number; i++) {
+
+			int physical_id = map_nodes[i].vertex_id;
+
+			if (vertices[vertex_id].name == vertices[physical_id].name
+				&& vertices[vertex_id].x == vertices[physical_id].x
+				&& vertices[vertex_id].y == vertices[physical_id].y) {
+
+				return &map_nodes[i];
+			}
+		}
+	}
+
+	return nullptr;
+}
+
+
+/***************************************************************************
+  å‡½æ•°åç§°ï¼šdraw_jiading_route_highlight
+  åŠŸ    èƒ½ï¼šåœ¨å˜‰å®šæ ¡åŒºå±€éƒ¨å›¾ä¸­ç»˜åˆ¶å½“å‰æ¨èè·¯çº¿ä½äºæ ¡åŒºå†…éƒ¨çš„éƒ¨åˆ†
+  è¾“å…¥å‚æ•°ï¼šconst vertex vertices[]ï¼šæ€»å›¾é¡¶ç‚¹æ•°ç»„
+  const jiading_map_node map_nodes[]ï¼šå˜‰å®šå±€éƒ¨å›¾èŠ‚ç‚¹æ•°ç»„
+  int map_node_numberï¼šå˜‰å®šå±€éƒ¨å›¾èŠ‚ç‚¹æ•°é‡
+  const ui_state& stateï¼šå½“å‰EasyXç•Œé¢çŠ¶æ€
+  è¿” å› å€¼ï¼šæ— 
+  è¯´    æ˜ï¼špathä¸ºç»ˆç‚¹åˆ°èµ·ç‚¹çš„å€’åºæ•°ç»„ï¼›åªæœ‰ä¸€æ¡è·¯å¾„è¾¹çš„ä¸¤ä¸ªç«¯ç‚¹éƒ½èƒ½æ˜ å°„
+  åˆ°å˜‰å®šå±€éƒ¨å›¾æ—¶æ‰ç»˜åˆ¶ï¼Œå…¬äº¤ä¸Šä¸‹è½¦çš„åŒåæ ‡è™šæ‹Ÿè¾¹è‡ªåŠ¨è·³è¿‡
+***************************************************************************/
+void draw_jiading_route_highlight(
+	const vertex vertices[],
+	const jiading_map_node map_nodes[],
+	int map_node_number,
+	const ui_state& state)
+{
+	if (!state.route_ready || state.path_vertex_number < 2)
+		return;
+
+	setlinecolor(RGB(255, 210, 40));
+	setlinestyle(PS_SOLID, 7);
+
+	for (int i = state.path_vertex_number - 1; i > 0; i--) {
+
+		int from_vertex = state.path[i];
+		int to_vertex = state.path[i - 1];
+
+		const jiading_map_node* from_node =
+			find_jiading_map_node(vertices, map_nodes,
+				map_node_number, from_vertex);
+
+		const jiading_map_node* to_node =
+			find_jiading_map_node(vertices, map_nodes,
+				map_node_number, to_vertex);
+
+		if (!from_node || !to_node)
+			continue;
+
+		//ç‰©ç†ç«™â†”åŒç«™å…¬äº¤çŠ¶æ€èŠ‚ç‚¹ï¼Œä¸¤ç«¯å±€éƒ¨åæ ‡å®Œå…¨ä¸€è‡´
+		if (from_node->x == to_node->x
+			&& from_node->y == to_node->y)
+			continue;
+
+		line(from_node->x, from_node->y,
+			to_node->x, to_node->y);
+	}
+
+	setlinestyle(PS_SOLID, 1);
+}
+
+/***************************************************************************
+  å‡½æ•°åç§°ï¼šfind_clicked_jiading_vertex
+  åŠŸ    èƒ½ï¼šæ ¹æ®é¼ æ ‡ä½ç½®åˆ¤æ–­å˜‰å®šå±€éƒ¨å›¾ä¸­è¢«ç‚¹å‡»çš„ç‰©ç†èŠ‚ç‚¹
+  è¾“å…¥å‚æ•°ï¼šconst jiading_map_node map_nodes[]ï¼šå˜‰å®šå±€éƒ¨å›¾èŠ‚ç‚¹æ•°ç»„
+  int map_node_numberï¼šå˜‰å®šå±€éƒ¨å›¾èŠ‚ç‚¹æ•°é‡
+  int mouse_xï¼šé¼ æ ‡ç‚¹å‡»ä½ç½®xåæ ‡
+  int mouse_yï¼šé¼ æ ‡ç‚¹å‡»ä½ç½®yåæ ‡
+  è¿” å› å€¼ï¼šå‘½ä¸­æ—¶è¿”å›åŸå›¾ç‰©ç†é¡¶ç‚¹ç¼–å·ï¼Œå¦åˆ™è¿”å›-1
+  è¯´    æ˜ï¼šå±€éƒ¨å›¾åªå…è®¸é€‰æ‹©56ï½63å·ç‰©ç†èŠ‚ç‚¹ï¼Œå…¬äº¤è™šæ‹ŸçŠ¶æ€èŠ‚ç‚¹ä¸èƒ½ä½œä¸º
+  ç”¨æˆ·èµ·ç»ˆç‚¹ï¼›ç‚¹å‡»åŠå¾„ä»é‡‡ç”¨10åƒç´ 
+***************************************************************************/
+int find_clicked_jiading_vertex(
+	const jiading_map_node map_nodes[],
+	int map_node_number,
+	int mouse_x,
+	int mouse_y)
+{
+	const int click_radius = 10;
+
+	for (int i = 0; i < map_node_number; i++) {
+
+		int dx = mouse_x - map_nodes[i].x;
+		int dy = mouse_y - map_nodes[i].y;
+
+		if (dx * dx + dy * dy
+			<= click_radius * click_radius) {
+
+			return map_nodes[i].vertex_id;
+		}
+	}
+
+	return -1;
+}
+
+/***************************************************************************
+  å‡½æ•°åç§°ï¼šdraw_jiading_campus_map
+  åŠŸ    èƒ½ï¼šç»˜åˆ¶å˜‰å®šæ ¡åŒºå±€éƒ¨åœ°å›¾ï¼ŒåŒ…æ‹¬å®˜æ–¹åº•å›¾ã€è·¯çº¿ã€èŠ‚ç‚¹ã€æ ‡ç­¾å’Œé€‰æ‹©æ ‡è®°
+  è¾“å…¥å‚æ•°ï¼šconst vertex vertices[]ï¼šæ€»å›¾é¡¶ç‚¹æ•°ç»„
+  const jiading_map_node map_nodes[]ï¼šå˜‰å®šå±€éƒ¨å›¾èŠ‚ç‚¹æ•°ç»„
+  int map_node_numberï¼šå˜‰å®šå±€éƒ¨å›¾èŠ‚ç‚¹æ•°é‡
+  const IMAGE& backgroundï¼šå˜‰å®šæ ¡åŒºå®˜æ–¹å¹³é¢å›¾
+  const ui_state& stateï¼šå½“å‰EasyXç•Œé¢çŠ¶æ€
+  è¿” å› å€¼ï¼šæ— 
+  è¯´    æ˜ï¼šå±€éƒ¨å›¾å ç”¨å·¦ä¾§å®Œæ•´900Ã—700åŒºåŸŸï¼›æ ‡ç­¾ä½ç½®ä¸èŠ‚ç‚¹ä½ç½®ç‹¬ç«‹ä¿å­˜ï¼Œ
+  èµ·ç»ˆç‚¹ä½¿ç”¨å±€éƒ¨å›¾åæ ‡é‡æ–°ç»˜åˆ¶ï¼Œä¸ä½¿ç”¨æ€»è§ˆvertex.xå’Œvertex.y
+***************************************************************************/
+void draw_jiading_campus_map(
+	const vertex vertices[],
+	const jiading_map_node map_nodes[],
+	int map_node_number,
+	const IMAGE& background,
+	const ui_state& state)
+{
+	//1. å®˜æ–¹åº•å›¾
+	putimage(0, 0, &background);
+
+	//2. æ¨èè·¯çº¿
+	if (state.route_ready)
+		draw_jiading_route_highlight(
+			vertices, map_nodes,
+			map_node_number, state);
+
+	//3. æ™®é€šèŠ‚ç‚¹
+	setlinestyle(PS_SOLID, 1);
+	setfillcolor(RGB(255, 255, 255));
+
+	for (int i = 0; i < map_node_number; i++) {
+
+		setlinecolor(RGB(220, 122, 36));
+
+		fillcircle(
+			map_nodes[i].x,
+			map_nodes[i].y,
+			6);
+	}
+
+	//4ã€5. æ ‡ç­¾
+	settextstyle(16, 0, "å¾®è½¯é›…é»‘");
+	setbkmode(TRANSPARENT);
+
+	for (int i = 0; i < map_node_number; i++) {
+
+		const string& text = map_nodes[i].short_name;
+
+		int text_width = textwidth(text.c_str());
+		int text_height = textheight(text.c_str());
+
+		int left = map_nodes[i].label_x;
+		int top = map_nodes[i].label_y;
+		int right = left + text_width + 8;
+		int bottom = top + text_height + 6;
+
+		//å…ˆç”»å¼•å¯¼çº¿ï¼Œæ ‡ç­¾ç™½æ¡†éšåç›–ä½çº¿å°¾
+		setlinecolor(RGB(100, 110, 120));
+		setlinestyle(PS_SOLID, 1);
+
+		line(map_nodes[i].x,
+			map_nodes[i].y,
+			left + 4,
+			top + text_height / 2);
+
+		//ç™½åº•æ ‡ç­¾
+		setfillcolor(RGB(255, 255, 255));
+		solidrectangle(left, top, right, bottom);
+
+		setlinecolor(RGB(150, 160, 170));
+		rectangle(left, top, right, bottom);
+
+		settextcolor(RGB(35, 45, 60));
+		outtextxy(left + 4, top + 3,
+			text.c_str());
+	}
+
+	//6. èµ·ç‚¹
+	const jiading_map_node* start_node =
+		find_jiading_map_node(vertices,
+			map_nodes, map_node_number,
+			state.start_vertex);
+
+	if (start_node) {
+		setlinecolor(RGB(20, 110, 60));
+		setfillcolor(RGB(47, 191, 113));
+
+		fillcircle(start_node->x,
+			start_node->y, 9);
+	}
+
+	//7. ç»ˆç‚¹
+	const jiading_map_node* end_node =
+		find_jiading_map_node(vertices,
+			map_nodes, map_node_number,
+			state.end_vertex);
+
+	if (end_node) {
+		setlinecolor(RGB(140, 35, 35));
+		setfillcolor(RGB(239, 90, 90));
+
+		fillcircle(end_node->x,
+			end_node->y, 9);
+	}
+}
+
+
+
+
+/***************************************************************************
+  å‡½æ•°åç§°ï¼šis_point_in_rectangle
+  åŠŸ    èƒ½ï¼šåˆ¤æ–­æŒ‡å®šåæ ‡æ˜¯å¦ä½äºä¸€ä¸ªçŸ©å½¢åŒºåŸŸå†…éƒ¨
+  è¾“å…¥å‚æ•°ï¼šint point_xï¼šéœ€è¦åˆ¤æ–­çš„ç‚¹çš„xåæ ‡
+  int point_yï¼šéœ€è¦åˆ¤æ–­çš„ç‚¹çš„yåæ ‡
+  int leftï¼šçŸ©å½¢å·¦è¾¹ç•Œ
+  int topï¼šçŸ©å½¢ä¸Šè¾¹ç•Œ
+  int rightï¼šçŸ©å½¢å³è¾¹ç•Œ
+  int bottomï¼šçŸ©å½¢ä¸‹è¾¹ç•Œ
+  è¿” å› å€¼ï¼šä½äºçŸ©å½¢å†…éƒ¨è¿”å›trueï¼Œå¦åˆ™è¿”å›false
+  è¯´    æ˜ï¼šEasyXå±å¹•åæ ‡ç³»åŸç‚¹ä½äºå·¦ä¸Šè§’ï¼Œxå‘å³å¢å¤§ï¼Œyå‘ä¸‹å¢å¤§
 ***************************************************************************/
 bool is_point_in_rectangle(int point_x, int point_y,
 	int left, int top, int right, int bottom)
@@ -1269,13 +1521,13 @@ bool is_point_in_rectangle(int point_x, int point_y,
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºdraw_selected_vertices
-  ¹¦    ÄÜ£ºÔÚÆÕÍ¨Õ¾µãÉÏ·½¶îÍâ»æÖÆµ±Ç°Ñ¡ÖĞµÄÆğµãºÍÖÕµã±ê¼Ç
-  ÊäÈë²ÎÊı£ºconst vertex vertices[]£º¶¥µãÊı×é
-  int vertex_number£º¶¥µãÊıÁ¿
-  const ui_state& state£ºµ±Ç°EasyX½çÃæ×´Ì¬
-  ·µ »Ø Öµ£ºÎŞ
-  Ëµ    Ã÷£ºÆğµãÊ¹ÓÃÂÌÉ«Ô²ĞÎ£¬ÖÕµãÊ¹ÓÃºìÉ«Ô²ĞÎ£»Ö»ÓĞ±àºÅºÏ·¨Ê±²Å»æÖÆ
+  å‡½æ•°åç§°ï¼šdraw_selected_vertices
+  åŠŸ    èƒ½ï¼šåœ¨æ™®é€šç«™ç‚¹ä¸Šæ–¹é¢å¤–ç»˜åˆ¶å½“å‰é€‰ä¸­çš„èµ·ç‚¹å’Œç»ˆç‚¹æ ‡è®°
+  è¾“å…¥å‚æ•°ï¼šconst vertex vertices[]ï¼šé¡¶ç‚¹æ•°ç»„
+  int vertex_numberï¼šé¡¶ç‚¹æ•°é‡
+  const ui_state& stateï¼šå½“å‰EasyXç•Œé¢çŠ¶æ€
+  è¿” å› å€¼ï¼šæ— 
+  è¯´    æ˜ï¼šèµ·ç‚¹ä½¿ç”¨ç»¿è‰²åœ†å½¢ï¼Œç»ˆç‚¹ä½¿ç”¨çº¢è‰²åœ†å½¢ï¼›åªæœ‰ç¼–å·åˆæ³•æ—¶æ‰ç»˜åˆ¶
 ***************************************************************************/
 void draw_selected_vertices(const vertex vertices[], int vertex_number,
 	const ui_state& state)
@@ -1296,12 +1548,12 @@ void draw_selected_vertices(const vertex vertices[], int vertex_number,
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºdraw_route_highlight
-  ¹¦    ÄÜ£º¸ù¾İµ±Ç°¹æ»®³öµÄpathÊı×é»æÖÆ»ÆÉ«ÍÆ¼öÂ·Ïß
-  ÊäÈë²ÎÊı£ºconst vertex vertices[]£º¶¥µãÊı×é
-  const ui_state& state£ºµ±Ç°EasyX½çÃæ×´Ì¬
-  ·µ »Ø Öµ£ºÎŞ
-  Ëµ    Ã÷£ºpathÊı×é°´ÕÕÖÕµãµ½Æğµãµ¹Ğò´æ´¢£¬Òò´Ë»æÖÆÊ±´ÓÊı×éÄ©Î²ÏòÇ°±éÀú
+  å‡½æ•°åç§°ï¼šdraw_route_highlight
+  åŠŸ    èƒ½ï¼šæ ¹æ®å½“å‰è§„åˆ’å‡ºçš„pathæ•°ç»„ç»˜åˆ¶é»„è‰²æ¨èè·¯çº¿
+  è¾“å…¥å‚æ•°ï¼šconst vertex vertices[]ï¼šé¡¶ç‚¹æ•°ç»„
+  const ui_state& stateï¼šå½“å‰EasyXç•Œé¢çŠ¶æ€
+  è¿” å› å€¼ï¼šæ— 
+  è¯´    æ˜ï¼špathæ•°ç»„æŒ‰ç…§ç»ˆç‚¹åˆ°èµ·ç‚¹å€’åºå­˜å‚¨ï¼Œå› æ­¤ç»˜åˆ¶æ—¶ä»æ•°ç»„æœ«å°¾å‘å‰éå†
 ***************************************************************************/
 void draw_route_highlight(const vertex vertices[], const ui_state& state)
 {
@@ -1317,7 +1569,7 @@ void draw_route_highlight(const vertex vertices[], const ui_state& state)
 		bool from_is_virtual = from_vertex >= physical_vertex_number;
 		bool to_is_virtual = to_vertex >= physical_vertex_number;
 
-		//ÎïÀí½ÚµãÓë¶ÔÓ¦¹«½»×´Ì¬½ÚµãÖ®¼äÖ»ÊÇÉÏÏÂ³µ¼Æ·Ñ±ß£¬²»×÷Îª³Ë³µÖ¸ÄÏµÄÒ»¶ÎÏÔÊ¾
+		//ç‰©ç†èŠ‚ç‚¹ä¸å¯¹åº”å…¬äº¤çŠ¶æ€èŠ‚ç‚¹ä¹‹é—´åªæ˜¯ä¸Šä¸‹è½¦è®¡è´¹è¾¹ï¼Œä¸ä½œä¸ºä¹˜è½¦æŒ‡å—çš„ä¸€æ®µæ˜¾ç¤º
 		if (from_is_virtual != to_is_virtual)
 			continue;
 
@@ -1329,36 +1581,50 @@ void draw_route_highlight(const vertex vertices[], const ui_state& state)
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºdraw_control_panel
-  ¹¦    ÄÜ£º»æÖÆEasyX´°¿ÚÓÒ²à¿ØÖÆÇøÓò£¬°üÀ¨ÆğÖÕµã¡¢Ê±¼ä¡¢²ßÂÔ¡¢ÆïĞĞºÍ²Ù×÷°´Å¥
-  ÊäÈë²ÎÊı£ºconst vertex vertices[]£º¶¥µãÊı×é
-  int vertex_number£º¶¥µãÊıÁ¿
-  const ui_state& state£ºµ±Ç°EasyX½çÃæ×´Ì¬
-  ·µ »Ø Öµ£ºÎŞ
-  Ëµ    Ã÷£ºÓÒ²àÃæ°å·¶Î§Ô¼Îªx=900~1199£»°´Å¥×ø±êĞèÒªºÍhandle_left_clickÖĞµÄÅĞ¶Ï±£³ÖÒ»ÖÂ
+  å‡½æ•°åç§°ï¼šdraw_control_panel
+  åŠŸ    èƒ½ï¼šç»˜åˆ¶EasyXçª—å£å³ä¾§æ§åˆ¶åŒºåŸŸï¼ŒåŒ…æ‹¬èµ·ç»ˆç‚¹ã€æ—¶é—´ã€ç­–ç•¥ã€éª‘è¡Œå’Œæ“ä½œæŒ‰é’®
+  è¾“å…¥å‚æ•°ï¼šconst vertex vertices[]ï¼šé¡¶ç‚¹æ•°ç»„
+  int vertex_numberï¼šé¡¶ç‚¹æ•°é‡
+  const ui_state& stateï¼šå½“å‰EasyXç•Œé¢çŠ¶æ€
+  è¿” å› å€¼ï¼šæ— 
+  è¯´    æ˜ï¼šå³ä¾§é¢æ¿èŒƒå›´çº¦ä¸ºx=900~1199ï¼›æŒ‰é’®åæ ‡éœ€è¦å’Œhandle_left_clickä¸­çš„åˆ¤æ–­ä¿æŒä¸€è‡´
 ***************************************************************************/
 void draw_control_panel(const vertex vertices[], int vertex_number,
 	const ui_state& state)
 {
 	setbkmode(TRANSPARENT);
 	settextcolor(RGB(35, 45, 60));
-	settextstyle(18, 0, "Î¢ÈíÑÅºÚ");
+	setfillcolor(RGB(235, 241, 247));
+	solidrectangle(930, 108, 1170, 130);
 
-	outtextxy(920, 20, "³ÇÊĞ¶àÄ£Ì¬½»Í¨µ¼º½");
+	setlinecolor(RGB(150, 160, 170));
+	rectangle(930, 108, 1170, 130);
 
-	outtextxy(920, 60, "Æğµã£º");
+	settextstyle(14, 0, "å¾®è½¯é›…é»‘");
+	settextcolor(RGB(35, 45, 60));
+
+	if (state.is_jiading_campus)
+		outtextxy(1005, 111, "è¿”å›å…¨å¸‚æ€»è§ˆ");
+	else
+		outtextxy(996, 111, "å˜‰å®šæ ¡åŒºå±€éƒ¨å›¾");
+
+	settextstyle(18, 0, "å¾®è½¯é›…é»‘");
+
+	outtextxy(920, 20, "åŸå¸‚å¤šæ¨¡æ€äº¤é€šå¯¼èˆª");
+
+	outtextxy(920, 60, "èµ·ç‚¹ï¼š");
 	if (is_valid_vertex_id(state.start_vertex, vertex_number))
 		outtextxy(980, 60, vertices[state.start_vertex].name.c_str());
 	else
-		outtextxy(980, 60, "Î´Ñ¡Ôñ");
+		outtextxy(980, 60, "æœªé€‰æ‹©");
 
-	outtextxy(920, 90, "ÖÕµã£º");
+	outtextxy(920, 90, "ç»ˆç‚¹ï¼š");
 	if (is_valid_vertex_id(state.end_vertex, vertex_number))
 		outtextxy(980, 90, vertices[state.end_vertex].name.c_str());
 	else
-		outtextxy(980, 90, "Î´Ñ¡Ôñ");
+		outtextxy(980, 90, "æœªé€‰æ‹©");
 
-	outtextxy(920, 135, "³ö·¢Ê±¼ä");
+	outtextxy(920, 135, "å‡ºå‘æ—¶é—´");
 
 	setlinecolor(RGB(150, 160, 170));
 
@@ -1374,7 +1640,7 @@ void draw_control_panel(const vertex vertices[], int vertex_number,
 	rectangle(1110, 165, 1160, 200);
 	outtextxy(1127, 172, "+5");
 
-	outtextxy(920, 230, "Â·Ïß²ßÂÔ");
+	outtextxy(920, 230, "è·¯çº¿ç­–ç•¥");
 
 	if (state.k == 0)
 		setfillcolor(RGB(210, 232, 250));
@@ -1384,7 +1650,7 @@ void draw_control_panel(const vertex vertices[], int vertex_number,
 	solidrectangle(930, 260, 1045, 295);
 	setlinecolor(RGB(120, 140, 160));
 	rectangle(930, 260, 1045, 295);
-	outtextxy(943, 267, "Ê±¼ä×î¶Ì");
+	outtextxy(943, 267, "æ—¶é—´æœ€çŸ­");
 
 	if (state.k == 8)
 		setfillcolor(RGB(210, 232, 250));
@@ -1393,9 +1659,9 @@ void draw_control_panel(const vertex vertices[], int vertex_number,
 
 	solidrectangle(1055, 260, 1170, 295);
 	rectangle(1055, 260, 1170, 295);
-	outtextxy(1068, 267, "¾­¼ÃÓÅÏÈ");
+	outtextxy(1068, 267, "ç»æµä¼˜å…ˆ");
 
-	outtextxy(920, 325, "ÔÊĞíÆïĞĞ");
+	outtextxy(920, 325, "å…è®¸éª‘è¡Œ");
 
 	setlinecolor(RGB(120, 140, 160));
 	rectangle(1030, 325, 1050, 345);
@@ -1408,28 +1674,28 @@ void draw_control_panel(const vertex vertices[], int vertex_number,
 	setfillcolor(RGB(35, 105, 165));
 	solidrectangle(930, 380, 1045, 420);
 	settextcolor(RGB(255, 255, 255));
-	outtextxy(947, 390, "¿ªÊ¼¹æ»®");
+	outtextxy(947, 390, "å¼€å§‹è§„åˆ’");
 
 	setfillcolor(RGB(230, 235, 240));
 	solidrectangle(1055, 380, 1170, 420);
 	setlinecolor(RGB(150, 160, 170));
 	rectangle(1055, 380, 1170, 420);
 	settextcolor(RGB(35, 45, 60));
-	outtextxy(1090, 390, "ÖØÖÃ");
+	outtextxy(1090, 390, "é‡ç½®");
 
-	outtextxy(920, 450, "µ±Ç°×´Ì¬£º");
+	outtextxy(920, 450, "å½“å‰çŠ¶æ€ï¼š");
 	outtextxy(920, 480, state.message.c_str());
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºdraw_route_result
-  ¹¦    ÄÜ£ºÔÚÓÒ²àÃæ°å»æÖÆµ±Ç°¹æ»®Â·ÏßµÄÊ±¼ä¡¢·ÑÓÃ¡¢µ½´ïÊ±¼äºÍ¼òÒªÂ·ÏßÖ¸ÄÏ
-  ÊäÈë²ÎÊı£ºconst vertex vertices[]£º¶¥µãÊı×é
-  const transit_line lines[]£ºÏßÂ·Êı×é
-  int line_number£ºÏßÂ·ÊıÁ¿
-  const ui_state& state£ºµ±Ç°EasyX½çÃæ×´Ì¬
-  ·µ »Ø Öµ£ºÎŞ
-  Ëµ    Ã÷£ºµÚÒ»°æ×î¶à»æÖÆÈı¶ÎÂ·ÏßÖ¸ÄÏ£¬¹ı³¤Â·ÏßºóĞøÔÙ¼ÓÈë·ÖÒ³»ò×Ô¶¯»»ĞĞ
+  å‡½æ•°åç§°ï¼šdraw_route_result
+  åŠŸ    èƒ½ï¼šåœ¨å³ä¾§é¢æ¿ç»˜åˆ¶å½“å‰è§„åˆ’è·¯çº¿çš„æ—¶é—´ã€è´¹ç”¨ã€åˆ°è¾¾æ—¶é—´å’Œç®€è¦è·¯çº¿æŒ‡å—
+  è¾“å…¥å‚æ•°ï¼šconst vertex vertices[]ï¼šé¡¶ç‚¹æ•°ç»„
+  const transit_line lines[]ï¼šçº¿è·¯æ•°ç»„
+  int line_numberï¼šçº¿è·¯æ•°é‡
+  const ui_state& stateï¼šå½“å‰EasyXç•Œé¢çŠ¶æ€
+  è¿” å› å€¼ï¼šæ— 
+  è¯´    æ˜ï¼šç¬¬ä¸€ç‰ˆæœ€å¤šç»˜åˆ¶ä¸‰æ®µè·¯çº¿æŒ‡å—ï¼Œè¿‡é•¿è·¯çº¿åç»­å†åŠ å…¥åˆ†é¡µæˆ–è‡ªåŠ¨æ¢è¡Œ
 ***************************************************************************/
 void draw_route_result(const vertex vertices[],
 	const transit_line lines[], int line_number,
@@ -1439,11 +1705,11 @@ void draw_route_result(const vertex vertices[],
 		return;
 
 	settextcolor(RGB(35, 45, 60));
-	settextstyle(16, 0, "Î¢ÈíÑÅºÚ");
+	settextstyle(16, 0, "å¾®è½¯é›…é»‘");
 
 	stringstream result_stream;
 
-	result_stream << "×ÜÊ±¼ä£º" << state.total_time_cost << "·ÖÖÓ";
+	result_stream << "æ€»æ—¶é—´ï¼š" << state.total_time_cost << "åˆ†é’Ÿ";
 	string result_text = result_stream.str();
 	outtextxy(920, 520, result_text.c_str());
 
@@ -1451,19 +1717,19 @@ void draw_route_result(const vertex vertices[],
 	result_stream.clear();
 
 	result_stream << fixed << setprecision(2)
-		<< "×Ü·ÑÓÃ£º" << state.total_fare_cost << "Ôª";
+		<< "æ€»è´¹ç”¨ï¼š" << state.total_fare_cost << "å…ƒ";
 	result_text = result_stream.str();
 	outtextxy(920, 545, result_text.c_str());
 
 	result_stream.str("");
 	result_stream.clear();
 
-	result_stream << "Ô¤¼Æµ½´ï£º"
+	result_stream << "é¢„è®¡åˆ°è¾¾ï¼š"
 		<< setw(2) << setfill('0') << state.arrival_hour
 		<< ":" << setw(2) << state.arrival_minute;
 
 	if (state.days_passed > 0)
-		result_stream << " +" << state.days_passed << "Ìì";
+		result_stream << " +" << state.days_passed << "å¤©";
 
 	result_text = result_stream.str();
 	outtextxy(920, 570, result_text.c_str());
@@ -1487,9 +1753,9 @@ void draw_route_result(const vertex vertices[],
 		if (current_edge->type == edge_type::TRANSFER) {
 			if (get_effective_time_cost(*current_edge,
 				state.allow_bike) < current_edge->time_cost)
-				way_text = "ÆïĞĞ";
+				way_text = "éª‘è¡Œ";
 			else
-				way_text = "²½ĞĞ";
+				way_text = "æ­¥è¡Œ";
 		}
 		else if (current_edge->line_id >= 0
 			&& current_edge->line_id < line_number) {
@@ -1518,49 +1784,77 @@ void draw_route_result(const vertex vertices[],
 
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºdraw_easyx_interface
-  ¹¦    ÄÜ£º°´ÕÕ¹Ì¶¨Í¼²ãË³ĞòÍêÕûË¢ĞÂEasyX½çÃæ
-  ÊäÈë²ÎÊı£ºconst vertex vertices[]£º¶¥µãÊı×é
-  int vertex_number£º¶¥µãÊıÁ¿
-  const transit_line lines[]£ºÏßÂ·Êı×é
-  int line_number£ºÏßÂ·ÊıÁ¿
-  const ui_state& state£ºµ±Ç°EasyX½çÃæ×´Ì¬
-  ·µ »Ø Öµ£ºÎŞ
-  Ëµ    Ã÷£º»æÖÆË³ĞòÎª±³¾°¡¢ÆÕÍ¨±ß¡¢ÍÆ¼öÂ·Ïß¡¢ÆÕÍ¨Õ¾µã¡¢ÆğÖÕµã±ê¼Ç¡¢ÓÒ²à¿ØÖÆÃæ°åºÍ½á¹û
+  å‡½æ•°åç§°ï¼šdraw_easyx_interface
+  åŠŸ    èƒ½ï¼šæ ¹æ®å½“å‰æ˜¾ç¤ºæ¨¡å¼å®Œæ•´åˆ·æ–°EasyXç•Œé¢
+  è¾“å…¥å‚æ•°ï¼šconst vertex vertices[]ï¼šé¡¶ç‚¹æ•°ç»„
+  int vertex_numberï¼šå›¾ä¸­å…¨éƒ¨é¡¶ç‚¹æ•°é‡
+  const transit_line lines[]ï¼šçº¿è·¯æ•°ç»„
+  int line_numberï¼šçº¿è·¯æ•°é‡
+  const jiading_map_node map_nodes[]ï¼šå˜‰å®šå±€éƒ¨å›¾èŠ‚ç‚¹æ•°ç»„
+  int map_node_numberï¼šå˜‰å®šå±€éƒ¨å›¾èŠ‚ç‚¹æ•°é‡
+  const IMAGE& jiading_backgroundï¼šå˜‰å®šæ ¡åŒºå®˜æ–¹åº•å›¾
+  const ui_state& stateï¼šå½“å‰ç•Œé¢çŠ¶æ€
+  è¿” å› å€¼ï¼šæ— 
+  è¯´    æ˜ï¼šfalseæ˜¾ç¤ºå…¨å¸‚æ€»è§ˆï¼›is_jiading_campusä¸ºtrueæ—¶å·¦ä¾§åˆ‡æ¢ä¸ºå˜‰å®šæ ¡åŒºå›¾ï¼Œ
+  å³ä¾§æ§åˆ¶é¢æ¿å’Œè·¯çº¿ç»“æœåŒºåŸŸåœ¨ä¸¤ç§æ¨¡å¼ä¸‹ä¿æŒä¸€è‡´
 ***************************************************************************/
-void draw_easyx_interface(const vertex vertices[], int vertex_number,
-	const transit_line lines[], int line_number,
+void draw_easyx_interface(
+	const vertex vertices[],
+	int vertex_number,
+	const transit_line lines[],
+	int line_number,
+	const jiading_map_node map_nodes[],
+	int map_node_number,
+	const IMAGE& jiading_background,
 	const ui_state& state)
 {
 	setbkcolor(RGB(247, 250, 252));
 	cleardevice();
 
-	draw_all_edges(vertices, vertex_number);
+	if (state.is_jiading_campus) {
 
-	if (state.route_ready)
-		draw_route_highlight(vertices, state);
+		draw_jiading_campus_map(
+			vertices,
+			map_nodes,
+			map_node_number,
+			jiading_background,
+			state);
+	}
+	else {
 
-	draw_all_vertices(vertices, vertex_number);
-	draw_selected_vertices(vertices, vertex_number, state);
+		draw_all_edges(vertices, vertex_number);
 
+		if (state.route_ready)
+			draw_route_highlight(vertices, state);
+
+		draw_all_vertices(vertices, vertex_number);
+
+		draw_selected_vertices(
+			vertices, vertex_number, state);
+	}
+
+	//ä¸¤ç§æ¨¡å¼å…±æœ‰çš„å³ä¾§åŒºåŸŸ
 	setlinecolor(RGB(190, 200, 210));
 	setlinestyle(PS_SOLID, 1);
+
 	line(900, 0, 900, 700);
 
-	draw_control_panel(vertices, vertex_number, state);
+	draw_control_panel(
+		vertices, vertex_number, state);
 
 	if (state.route_ready)
-		draw_route_result(vertices, lines, line_number, state);
+		draw_route_result(
+			vertices, lines,
+			line_number, state);
 
 	FlushBatchDraw();
 }
-
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºreset_ui_state
-  ¹¦    ÄÜ£º°ÑEasyX½çÃæ×´Ì¬»Ö¸´µ½³ÌĞòÆô¶¯Ê±µÄÄ¬ÈÏ×´Ì¬
-  ÊäÈë²ÎÊı£ºui_state& state£ºĞèÒªÖØÖÃµÄ½çÃæ×´Ì¬
-  ·µ »Ø Öµ£ºÎŞ
-  Ëµ    Ã÷£ºÊı×éÖĞµÄ¾ÉÊı¾İÎŞĞèÖğÏîÇåÁã£¬Ö»ÒªÂ·¾¶³¤¶È¹éÁãÇÒroute_readyÎªfalse¼´¿ÉÊÓÎªÎŞĞ§
+  å‡½æ•°åç§°ï¼šreset_ui_state
+  åŠŸ    èƒ½ï¼šæŠŠEasyXç•Œé¢çŠ¶æ€æ¢å¤åˆ°ç¨‹åºå¯åŠ¨æ—¶çš„é»˜è®¤çŠ¶æ€
+  è¾“å…¥å‚æ•°ï¼šui_state& stateï¼šéœ€è¦é‡ç½®çš„ç•Œé¢çŠ¶æ€
+  è¿” å› å€¼ï¼šæ— 
+  è¯´    æ˜ï¼šæ•°ç»„ä¸­çš„æ—§æ•°æ®æ— éœ€é€é¡¹æ¸…é›¶ï¼Œåªè¦è·¯å¾„é•¿åº¦å½’é›¶ä¸”route_readyä¸ºfalseå³å¯è§†ä¸ºæ— æ•ˆ
 ***************************************************************************/
 void reset_ui_state(ui_state& state)
 {
@@ -1569,6 +1863,7 @@ void reset_ui_state(ui_state& state)
 
 	state.k = 0;
 	state.allow_bike = false;
+	state.is_jiading_campus = false;
 
 	state.start_hour = 8;
 	state.start_minute = 30;
@@ -1583,18 +1878,18 @@ void reset_ui_state(ui_state& state)
 	state.days_passed = 0;
 
 	state.route_ready = false;
-	state.message = "ÇëÑ¡ÔñÆğµã";
+	state.message = "è¯·é€‰æ‹©èµ·ç‚¹";
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºcalculate_route_for_ui
-  ¹¦    ÄÜ£º¸ù¾İµ±Ç°ui_stateÖĞµÄÆğÖÕµãºÍ²ßÂÔµ÷ÓÃÒÑÓĞËã·¨Íê³ÉÒ»´ÎÂ·Ïß¹æ»®
-  ÊäÈë²ÎÊı£ºvertex vertices[]£º¶¥µãÊı×é
-  int vertex_number£º¶¥µãÊıÁ¿
-  ui_state& state£ºµ±Ç°EasyX½çÃæ×´Ì¬£¬¹æ»®½á¹ûĞ´»ØÆäÖĞ
-  ·µ »Ø Öµ£ºÂ·Ïß¹æ»®³É¹¦·µ»Øtrue£¬Ê§°Ü·µ»Øfalse
-  Ëµ    Ã÷£ºÄÚ²¿ÑÏ¸ñ°´ÕÕdijkstra¡¢build_paths¡¢calculate_path_statistics¡¢
-  calculate_arrival_timeµÄË³Ğòµ÷ÓÃÔ­ÓĞËã·¨£¬½çÃæ²ã²»ÖØĞÂÊµÏÖÑ°Â·Ëã·¨
+  å‡½æ•°åç§°ï¼šcalculate_route_for_ui
+  åŠŸ    èƒ½ï¼šæ ¹æ®å½“å‰ui_stateä¸­çš„èµ·ç»ˆç‚¹å’Œç­–ç•¥è°ƒç”¨å·²æœ‰ç®—æ³•å®Œæˆä¸€æ¬¡è·¯çº¿è§„åˆ’
+  è¾“å…¥å‚æ•°ï¼švertex vertices[]ï¼šé¡¶ç‚¹æ•°ç»„
+  int vertex_numberï¼šé¡¶ç‚¹æ•°é‡
+  ui_state& stateï¼šå½“å‰EasyXç•Œé¢çŠ¶æ€ï¼Œè§„åˆ’ç»“æœå†™å›å…¶ä¸­
+  è¿” å› å€¼ï¼šè·¯çº¿è§„åˆ’æˆåŠŸè¿”å›trueï¼Œå¤±è´¥è¿”å›false
+  è¯´    æ˜ï¼šå†…éƒ¨ä¸¥æ ¼æŒ‰ç…§dijkstraã€build_pathsã€calculate_path_statisticsã€
+  calculate_arrival_timeçš„é¡ºåºè°ƒç”¨åŸæœ‰ç®—æ³•ï¼Œç•Œé¢å±‚ä¸é‡æ–°å®ç°å¯»è·¯ç®—æ³•
 ***************************************************************************/
 bool calculate_route_for_ui(vertex vertices[], int vertex_number,
 	ui_state& state)
@@ -1607,12 +1902,12 @@ bool calculate_route_for_ui(vertex vertices[], int vertex_number,
 	if (!is_valid_vertex_id(state.start_vertex, vertex_number)
 		|| !is_valid_vertex_id(state.end_vertex, vertex_number)) {
 
-		state.message = "ÇëÏÈÑ¡ÔñÆğµãºÍÖÕµã";
+		state.message = "è¯·å…ˆé€‰æ‹©èµ·ç‚¹å’Œç»ˆç‚¹";
 		return false;
 	}
 
 	if (state.start_vertex == state.end_vertex) {
-		state.message = "ÆğµãºÍÖÕµã²»ÄÜÏàÍ¬";
+		state.message = "èµ·ç‚¹å’Œç»ˆç‚¹ä¸èƒ½ç›¸åŒ";
 		return false;
 	}
 
@@ -1621,7 +1916,7 @@ bool calculate_route_for_ui(vertex vertices[], int vertex_number,
 		state.distance, state.previous_vertex,
 		state.previous_edge,
 		state.allow_bike)) {
-		state.message = "Dijkstra¼ÆËãÊ§°Ü";
+		state.message = "Dijkstraè®¡ç®—å¤±è´¥";
 		return false;
 	}
 
@@ -1629,7 +1924,7 @@ bool calculate_route_for_ui(vertex vertices[], int vertex_number,
 		state.start_vertex, state.end_vertex,
 		state.path, state.path_vertex_number)) {
 
-		state.message = "µ±Ç°ÆğÖÕµãÖ®¼äÃ»ÓĞ¿ÉÓÃÂ·Ïß";
+		state.message = "å½“å‰èµ·ç»ˆç‚¹ä¹‹é—´æ²¡æœ‰å¯ç”¨è·¯çº¿";
 		return false;
 	}
 
@@ -1640,7 +1935,7 @@ bool calculate_route_for_ui(vertex vertices[], int vertex_number,
 		state.total_fare_cost,
 		state.allow_bike)) {
 
-		state.message = "Â·ÏßÍ³¼ÆÊ§°Ü";
+		state.message = "è·¯çº¿ç»Ÿè®¡å¤±è´¥";
 		return false;
 	}
 
@@ -1652,36 +1947,54 @@ bool calculate_route_for_ui(vertex vertices[], int vertex_number,
 		state.arrival_minute,
 		state.days_passed)) {
 
-		state.message = "µ½´ïÊ±¼ä¼ÆËãÊ§°Ü";
+		state.message = "åˆ°è¾¾æ—¶é—´è®¡ç®—å¤±è´¥";
 		return false;
 	}
 
 	state.route_ready = true;
-	state.message = "Â·Ïß¹æ»®Íê³É";
+	state.message = "è·¯çº¿è§„åˆ’å®Œæˆ";
 
 	return true;
 }
 
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºhandle_left_click
-  ¹¦    ÄÜ£º´¦ÀíÒ»´ÎÊó±ê×ó¼üµã»÷£¬¸ù¾İµã»÷Î»ÖÃĞŞ¸ÄÕ¾µãÑ¡Ôñ¡¢Ê±¼ä¡¢²ßÂÔ¡¢ÆïĞĞ»ò¹æ»®×´Ì¬
-  ÊäÈë²ÎÊı£ºint mouse_x£ºÊó±êµã»÷Î»ÖÃµÄx×ø±ê
-  int mouse_y£ºÊó±êµã»÷Î»ÖÃµÄy×ø±ê
-  vertex vertices[]£º¶¥µãÊı×é
-  int vertex_number£º¶¥µãÊıÁ¿
-  ui_state& state£ºµ±Ç°EasyX½çÃæ×´Ì¬
-  ·µ »Ø Öµ£ºÎŞ
-  Ëµ    Ã÷£º×ó²àx<900ÇøÓòÓÃÓÚÑ¡ÔñÕ¾µã£»ÓÒ²àÇøÓò°´ÕÕ¹Ì¶¨¾ØĞÎ×ø±êÅĞ¶Ï²»Í¬¿Ø¼ş
+  å‡½æ•°åç§°ï¼šhandle_left_click
+  åŠŸ    èƒ½ï¼šå¤„ç†ä¸€æ¬¡é¼ æ ‡å·¦é”®ç‚¹å‡»ï¼Œæ ¹æ®ç‚¹å‡»ä½ç½®ä¿®æ”¹ç«™ç‚¹é€‰æ‹©ã€æ—¶é—´ã€ç­–ç•¥ã€éª‘è¡Œæˆ–è§„åˆ’çŠ¶æ€
+  è¾“å…¥å‚æ•°ï¼šint mouse_xï¼šé¼ æ ‡ç‚¹å‡»ä½ç½®çš„xåæ ‡
+  int mouse_yï¼šé¼ æ ‡ç‚¹å‡»ä½ç½®çš„yåæ ‡
+  vertex vertices[]ï¼šé¡¶ç‚¹æ•°ç»„
+  int vertex_numberï¼šé¡¶ç‚¹æ•°é‡
+  ui_state& stateï¼šå½“å‰EasyXç•Œé¢çŠ¶æ€
+  è¿” å› å€¼ï¼šæ— 
+  è¯´    æ˜ï¼šå·¦ä¾§x<900åŒºåŸŸç”¨äºé€‰æ‹©ç«™ç‚¹ï¼›å³ä¾§åŒºåŸŸæŒ‰ç…§å›ºå®šçŸ©å½¢åæ ‡åˆ¤æ–­ä¸åŒæ§ä»¶
 ***************************************************************************/
 void handle_left_click(int mouse_x, int mouse_y,
 	vertex vertices[], int vertex_number,
+	const jiading_map_node map_nodes[],
+	int map_node_number,
 	ui_state& state)
 {
 	if (mouse_x < 900) {
-		int clicked_vertex =
-			find_clicked_vertex(vertices, vertex_number,
-				mouse_x, mouse_y);
+
+		int clicked_vertex;
+
+		if (state.is_jiading_campus) {
+			clicked_vertex =
+				find_clicked_jiading_vertex(
+					map_nodes,
+					map_node_number,
+					mouse_x,
+					mouse_y);
+		}
+		else {
+			clicked_vertex =
+				find_clicked_vertex(
+					vertices,
+					vertex_number,
+					mouse_x,
+					mouse_y);
+		}
 
 		if (clicked_vertex == -1)
 			return;
@@ -1691,19 +2004,28 @@ void handle_left_click(int mouse_x, int mouse_y,
 			state.end_vertex = -1;
 			state.route_ready = false;
 			state.path_vertex_number = 0;
-			state.message = "ÇëÑ¡ÔñÖÕµã";
+			state.message = "è¯·é€‰æ‹©ç»ˆç‚¹";
 		}
 		else {
 			if (clicked_vertex == state.start_vertex) {
-				state.message = "ÖÕµã²»ÄÜÓëÆğµãÏàÍ¬";
+				state.message = "ç»ˆç‚¹ä¸èƒ½ä¸èµ·ç‚¹ç›¸åŒ";
 				return;
 			}
 
 			state.end_vertex = clicked_vertex;
 			state.route_ready = false;
 			state.path_vertex_number = 0;
-			state.message = "ÆğÖÕµãÒÑÑ¡Ôñ£¬Çë¿ªÊ¼¹æ»®";
+			state.message = "èµ·ç»ˆç‚¹å·²é€‰æ‹©ï¼Œè¯·å¼€å§‹è§„åˆ’";
 		}
+
+		return;
+	}
+
+	if (is_point_in_rectangle(mouse_x, mouse_y,
+		930, 108, 1170, 130)) {
+
+		state.is_jiading_campus =
+			!state.is_jiading_campus;
 
 		return;
 	}
@@ -1744,7 +2066,7 @@ void handle_left_click(int mouse_x, int mouse_y,
 
 		state.k = 0;
 		state.route_ready = false;
-		state.message = "ÒÑÑ¡ÔñÊ±¼ä×î¶Ì²ßÂÔ";
+		state.message = "å·²é€‰æ‹©æ—¶é—´æœ€çŸ­ç­–ç•¥";
 	}
 
 	else if (is_point_in_rectangle(mouse_x, mouse_y,
@@ -1752,7 +2074,7 @@ void handle_left_click(int mouse_x, int mouse_y,
 
 		state.k = 8;
 		state.route_ready = false;
-		state.message = "ÒÑÑ¡Ôñ¾­¼ÃÓÅÏÈ²ßÂÔ";
+		state.message = "å·²é€‰æ‹©ç»æµä¼˜å…ˆç­–ç•¥";
 	}
 
 	else if (is_point_in_rectangle(mouse_x, mouse_y,
@@ -1762,9 +2084,9 @@ void handle_left_click(int mouse_x, int mouse_y,
 		state.route_ready = false;
 
 		if (state.allow_bike)
-			state.message = "ÒÑÔÊĞíÆïĞĞ½Ó²µ";
+			state.message = "å·²å…è®¸éª‘è¡Œæ¥é©³";
 		else
-			state.message = "ÒÑ¹Ø±ÕÆïĞĞ½Ó²µ";
+			state.message = "å·²å…³é—­éª‘è¡Œæ¥é©³";
 	}
 
 	else if (is_point_in_rectangle(mouse_x, mouse_y,
@@ -1781,24 +2103,37 @@ void handle_left_click(int mouse_x, int mouse_y,
 }
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£ºrun_easyx_interface
-  ¹¦    ÄÜ£ºÔËĞĞEasyXÖ÷½çÃæÏûÏ¢Ñ­»·£¬³ÖĞø½ÓÊÕÊó±êºÍ¼üÅÌÏûÏ¢²¢¸ù¾İ×´Ì¬ÖØĞÂ»æÖÆ½çÃæ
-  ÊäÈë²ÎÊı£ºvertex vertices[]£º¶¥µãÊı×é
-  int vertex_number£º¶¥µãÊıÁ¿
-  const transit_line lines[]£ºÏßÂ·Êı×é
-  int line_number£ºÏßÂ·ÊıÁ¿
-  ui_state& state£ºµ±Ç°EasyX½çÃæ×´Ì¬
-  ·µ »Ø Öµ£ºÎŞ
-  Ëµ    Ã÷£ºÊó±ê×ó¼ü´¥·¢handle_left_clickºóÖØĞÂ»æÖÆ£»°´ESC»ò¹Ø±Õ´°¿Ú½áÊøÑ­»·
+  å‡½æ•°åç§°ï¼šrun_easyx_interface
+  åŠŸ    èƒ½ï¼šè¿è¡ŒEasyXä¸»ç•Œé¢æ¶ˆæ¯å¾ªç¯ï¼ŒæŒç»­æ¥æ”¶é¼ æ ‡å’Œé”®ç›˜æ¶ˆæ¯å¹¶æ ¹æ®çŠ¶æ€é‡æ–°ç»˜åˆ¶ç•Œé¢
+  è¾“å…¥å‚æ•°ï¼švertex vertices[]ï¼šé¡¶ç‚¹æ•°ç»„
+  int vertex_numberï¼šé¡¶ç‚¹æ•°é‡
+  const transit_line lines[]ï¼šçº¿è·¯æ•°ç»„
+  int line_numberï¼šçº¿è·¯æ•°é‡
+  ui_state& stateï¼šå½“å‰EasyXç•Œé¢çŠ¶æ€
+  è¿” å› å€¼ï¼šæ— 
+  è¯´    æ˜ï¼šé¼ æ ‡å·¦é”®è§¦å‘handle_left_clickåé‡æ–°ç»˜åˆ¶ï¼›æŒ‰ESCæˆ–å…³é—­çª—å£ç»“æŸå¾ªç¯
 ***************************************************************************/
-void run_easyx_interface(vertex vertices[], int vertex_number,
-	const transit_line lines[], int line_number,
+void run_easyx_interface(
+	vertex vertices[],
+	int vertex_number,
+	const transit_line lines[],
+	int line_number,
+	const jiading_map_node map_nodes[],
+	int map_node_number,
+	const IMAGE& jiading_background,
 	ui_state& state)
 {
 	BeginBatchDraw();
 
-	draw_easyx_interface(vertices, vertex_number,
-		lines, line_number, state);
+	draw_easyx_interface(
+		vertices,
+		vertex_number,
+		lines,
+		line_number,
+		map_nodes,
+		map_node_number,
+		jiading_background,
+		state);
 
 	while (true) {
 		ExMessage message =
@@ -1813,11 +2148,24 @@ void run_easyx_interface(vertex vertices[], int vertex_number,
 
 		if (message.message == WM_LBUTTONDOWN) {
 
-			handle_left_click(message.x, message.y,
-				vertices, vertex_number, state);
+			handle_left_click(
+				message.x,
+				message.y,
+				vertices,
+				vertex_number,
+				map_nodes,
+				map_node_number,
+				state);
 
-			draw_easyx_interface(vertices, vertex_number,
-				lines, line_number, state);
+			draw_easyx_interface(
+				vertices,
+				vertex_number,
+				lines,
+				line_number,
+				map_nodes,
+				map_node_number,
+				jiading_background,
+				state);
 		}
 	}
 
@@ -1845,33 +2193,33 @@ void run_easyx_interface(vertex vertices[], int vertex_number,
 
 
 /***************************************************************************
-  º¯ÊıÃû³Æ£º
-  ¹¦    ÄÜ£º
-  ÊäÈë²ÎÊı£º
-  ·µ »Ø Öµ£º
-  Ëµ    Ã÷£º
+  å‡½æ•°åç§°ï¼š
+  åŠŸ    èƒ½ï¼š
+  è¾“å…¥å‚æ•°ï¼š
+  è¿” å› å€¼ï¼š
+  è¯´    æ˜ï¼š
 ***************************************************************************/
 int main()
 {
-	string lines_path = "data/lines.csv";//ÏßÂ·CSVÂ·¾¶
-	string stations_path = "data/stations.csv";//Õ¾µãCSVÂ·¾¶
-	string edges_path = "data/edges.csv";//±ßCSVÂ·¾¶
+	string lines_path = "data/lines.csv";//çº¿è·¯CSVè·¯å¾„
+	string stations_path = "data/stations.csv";//ç«™ç‚¹CSVè·¯å¾„
+	string edges_path = "data/edges.csv";//è¾¹CSVè·¯å¾„
 	transit_line lines[max_lines];
-	int line_number = 0;//µ±Ç°Êµ¼ÊÏßÂ·ÊıÁ¿£¬³õÊ¼»¹Ã»¼ÓÕ¾µãËùÒÔÎª0
+	int line_number = 0;//å½“å‰å®é™…çº¿è·¯æ•°é‡ï¼Œåˆå§‹è¿˜æ²¡åŠ ç«™ç‚¹æ‰€ä»¥ä¸º0
 	if (!load_transit_lines(lines_path, lines, line_number)) {
-		cout << "¼ÓÔØÏßÂ·CSVÎÄ¼şÊ§°Ü" << endl;
+		cout << "åŠ è½½çº¿è·¯CSVæ–‡ä»¶å¤±è´¥" << endl;
 		return 1;
 	}
 
 	vertex vertices[max_vertices];
-	int vertex_number = 0;//µ±Ç°Êµ¼Ê¶¥µãÊıÁ¿£¬³õÊ¼»¹Ã»¼ÓÕ¾µãËùÒÔÎª0
+	int vertex_number = 0;//å½“å‰å®é™…é¡¶ç‚¹æ•°é‡ï¼Œåˆå§‹è¿˜æ²¡åŠ ç«™ç‚¹æ‰€ä»¥ä¸º0
 	if (!load_vertices(stations_path, vertices, vertex_number)) {
-		cout << "¼ÓÔØÕ¾µãCSVÎÄ¼şÊ§°Ü" << endl;
+		cout << "åŠ è½½ç«™ç‚¹CSVæ–‡ä»¶å¤±è´¥" << endl;
 		return 2;
 	}
 
 	if (!load_edges(edges_path, vertices, vertex_number, lines, line_number)) {
-		cout << "¼ÓÔØ±ßCSVÎÄ¼şÊ§°Ü" << endl;
+		cout << "åŠ è½½è¾¹CSVæ–‡ä»¶å¤±è´¥" << endl;
 		return 3;
 	}
 	
@@ -1882,6 +2230,25 @@ int main()
 #endif
 
 	initgraph(1200, 700, EX_SHOWCONSOLE);
+	IMAGE jiading_background;
+
+	loadimage(
+		&jiading_background,
+		"data/jiading_campus.png");
+
+	jiading_map_node jiading_map_nodes[] = {
+	{56, 536,382, 545, 383, "æ•™å­¦æ¥¼/å®šç­è½¦ç‚¹"},
+	{57, 408, 490, 360, 470, "æµäº‹æ¥¼"},
+	{58, 642, 326, 660, 305, "å‹å›­8å·æ¥¼"},
+	{59, 350, 510, 240, 530, "ç»¿è‹‘è·¯æ›¹å®‰å…¬è·¯"},
+	{60, 482, 330, 495, 310, "ä»°æœ›æ˜Ÿç©ºåœé ç‚¹"},
+	{61, 601, 353, 615, 355, "7å·æ¥¼å€™è½¦ç‚¹"},
+	{62, 586, 72, 600, 82, "åŒ—é—¨"},
+	{63, 12, 30, 30, 52, "å¤§æ¡¥ä¸œä¾§éª‘è½¦ç‚¹"}
+	};
+
+	const int jiading_map_node_number =
+		sizeof(jiading_map_nodes) / sizeof(jiading_map_nodes[0]);
 
 #if test_min_heap
 	min_heap test;
@@ -1889,19 +2256,19 @@ int main()
 	insert_heap(test, 0, 2);
 	insert_heap(test, 1, 5);
 	insert_heap(test, 2, 3);
-	cout << "²âÊÔÀ©Èİ¹¦ÄÜ£¬µ±Ç°sizeºÍcapacity·Ö±ğÊÇ£º" << test.size << " " << test.capacity << endl;
+	cout << "æµ‹è¯•æ‰©å®¹åŠŸèƒ½ï¼Œå½“å‰sizeå’Œcapacityåˆ†åˆ«æ˜¯ï¼š" << test.size << " " << test.capacity << endl;
 	insert_heap(test, 3, 8);
 	insert_heap(test, 4, 9);
 	insert_heap(test, 5, 4);
 	insert_heap(test, 6, 1);
-	cout << "²âÊÔÀ©Èİ¹¦ÄÜ£¬µ±Ç°sizeºÍcapacity·Ö±ğÊÇ£º" << test.size << " " << test.capacity << endl;
-	while (!is_heap_empty(test)) {//Ö»Òª»¹Ã»¿Õ£¬¾ÍÒ»Ö±È¡ÔªËØ£¬Ïà±ÈÖ±½ÓÅĞ¶ÏsizeÔÚÍü¼Çextract_min»á×Ô¶¯--µÄÊ±ºò¶îÍâ¼ÓÁËÒ»ĞĞtest.size--ÇÒ³õÊ¼sizeÎªÆæÊıÊ±²»»áËÀÑ­»·
+	cout << "æµ‹è¯•æ‰©å®¹åŠŸèƒ½ï¼Œå½“å‰sizeå’Œcapacityåˆ†åˆ«æ˜¯ï¼š" << test.size << " " << test.capacity << endl;
+	while (!is_heap_empty(test)) {//åªè¦è¿˜æ²¡ç©ºï¼Œå°±ä¸€ç›´å–å…ƒç´ ï¼Œç›¸æ¯”ç›´æ¥åˆ¤æ–­sizeåœ¨å¿˜è®°extract_minä¼šè‡ªåŠ¨--çš„æ—¶å€™é¢å¤–åŠ äº†ä¸€è¡Œtest.size--ä¸”åˆå§‹sizeä¸ºå¥‡æ•°æ—¶ä¸ä¼šæ­»å¾ªç¯
 		heap_node min;
 		extract_min(test, min);
-		cout << "±¾ÂÖÈ¡³öµÄ¶Ñ¶¥ÔªËØĞòºÅºÍ¾àÀëÊÇ£º" << min.vertex_id << " " << min.distance << endl;
+		cout << "æœ¬è½®å–å‡ºçš„å †é¡¶å…ƒç´ åºå·å’Œè·ç¦»æ˜¯ï¼š" << min.vertex_id << " " << min.distance << endl;
 	}
 	heap_node empty;
-	cout << "²âÊÔ¿Õ¶Ñµ¯³öÊÇ·ñÕı³££¬0ÊÇ¶ÔµÄ£º" << extract_min(test, empty) << endl;
+	cout << "æµ‹è¯•ç©ºå †å¼¹å‡ºæ˜¯å¦æ­£å¸¸ï¼Œ0æ˜¯å¯¹çš„ï¼š" << extract_min(test, empty) << endl;
 	release_heap(test);
 #endif
 
@@ -1914,7 +2281,16 @@ int main()
 	
 	
 	ui_state state;
-	run_easyx_interface(vertices, vertex_number, lines, line_number, state);
+
+	run_easyx_interface(
+		vertices,
+		vertex_number,
+		lines,
+		line_number,
+		jiading_map_nodes,
+		jiading_map_node_number,
+		jiading_background,
+		state);
 
 	for (int i = 0; i < vertex_number; i++)
 		release_edges(vertices[i]);
