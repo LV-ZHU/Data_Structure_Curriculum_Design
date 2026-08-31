@@ -1072,19 +1072,6 @@ bool output_route_guide(const vertex vertices[],
 	return true;
 }
 
-
-/***************************************************************************
-  函数名称：calculate_path_statistics
-  功    能：统计路径总时间、总费用，结果分别存放在引用变量int& total_time_cost和double& total_fare_cost中
-  输入参数：const vertex vertices[]：顶点数组
-  const int path[]：路径倒序数组
-  int path_vertex_number：路径数量
-  int& total_time_cost：存放结果的总耗时
-  double& total_fare_cost：存放结果的总费用
-  bool allow_bike = false：是否允许骑行，默认false
-  返 回 值：成功为true，找不到路径中的边则为false
-  说    明：find_directed_edge返回边指针；调用get_effective_time_cost函数时需要解引用该指针
-***************************************************************************/
 /***************************************************************************
   函数名称：calculate_path_statistics
   功    能：根据Dijkstra实际采用的前驱边统计路径总时间和总费用
@@ -2244,7 +2231,10 @@ int main()
 	{60, 482, 330, 495, 310, "仰望星空停靠点"},
 	{61, 601, 353, 615, 355, "7号楼候车点"},
 	{62, 586, 72, 600, 82, "北门"},
-	{63, 12, 30, 30, 52, "大桥东侧骑车点"}
+	{63, 12, 30, 30, 52, "大桥东侧骑车点"},
+	{69, 550, 62, 585, 40, "昌吉东路绿苑路"},
+	{73, 95, 390, 115, 365, "曹安公路二十三号桥"},
+	{84, 668, 652, 690, 620, "曹安公路嘉松北路"}
 	};
 
 	const int jiading_map_node_number =
