@@ -1501,6 +1501,69 @@ void set_map_font(int font_height, int font_weight = FW_NORMAL)
 }
 
 /***************************************************************************
+  函数名称：draw_schematic_connection
+  功    能：按轨道交通示意图方式绘制总览图中的一条连接
+  输入参数：const vertex vertices[]：顶点数组；int from_vertex：起点编号；
+  int to_vertex：终点编号；const edge_node* current_edge：当前边
+  返 回 值：无
+  说    明：普通边直接连接；两条教师班车沿总图外缘绕行，避免长直线切穿网络中心
+***************************************************************************/
+void draw_schematic_connection(const vertex vertices[],
+    int from_vertex, int to_vertex,
+    const edge_node* current_edge)
+{
+    int x1 = vertices[from_vertex].x;
+    int y1 = vertices[from_vertex].y;
+    int x2 = vertices[to_vertex].x;
+    int y2 = vertices[to_vertex].y;
+
+    if (!current_edge) {
+        line(x1, y1, x2, y2);
+        return;
+    }
+
+    int dx = x1 - x2;
+    int dy = y1 - y2;
+    int distance_square = dx * dx + dy * dy;
+
+    if (current_edge->type == edge_type::BUS
+        && current_edge->line_id == 10
+        && distance_square > 10000) {
+        const int route_y = 675;
+        line(x1, y1, x1, route_y);
+        line(x1, route_y, x2, route_y);
+        line(x2, route_y, x2, y2);
+        return;
+    }
+
+    if (current_edge->type == edge_type::BUS
+        && current_edge->line_id == 11
+        && distance_square > 10000) {
+        int left_x = x1;
+        int left_y = y1;
+        int right_x = x2;
+        int right_y = y2;
+
+        if (left_x > right_x) {
+            left_x = x2;
+            left_y = y2;
+            right_x = x1;
+            right_y = y1;
+        }
+
+        const int border_x = 24;
+        const int border_y = 22;
+        line(left_x, left_y, border_x, left_y);
+        line(border_x, left_y, border_x, border_y);
+        line(border_x, border_y, right_x, border_y);
+        line(right_x, border_y, right_x, right_y);
+        return;
+    }
+
+    line(x1, y1, x2, y2);
+}
+
+/***************************************************************************
   函数名称：draw_all_edges
   功    能：在EasyX窗口中绘制当前邻接表里的全部无向边
   输入参数：const vertex vertices[]：顶点数组
@@ -1510,49 +1573,53 @@ void set_map_font(int font_height, int font_weight = FW_NORMAL)
 ***************************************************************************/
 void draw_all_edges(const vertex vertices[], int vertex_number)
 {
-	for (int i = 0; i < vertex_number; i++) {
-		const edge_node* current_edge = vertices[i].first_edge;
-		while (current_edge) {
-			if (i < current_edge->to) {//无向边只处理编号较小的一端，防止重复处理
-				if (current_edge->type == edge_type::TRANSFER) {
-					setlinecolor(RGB(135, 145, 153));
-					setlinestyle(PS_DASH, 1);
-				}
-				else if (current_edge->type == edge_type::BUS) {
-					if (current_edge->line_id == 10 || current_edge->line_id == 11)
-						setlinecolor(RGB(47, 124, 89));
-					else
-						setlinecolor(RGB(33, 118, 163));
-					setlinestyle(PS_SOLID, 2);
-				}
-				else {
-					switch (current_edge->line_id) {
-						case 0:
-							setlinecolor(RGB(111, 75, 126));
-							break;
-						case 1:
-							setlinecolor(RGB(124, 74, 43));
-							break;
-						case 2:
-							setlinecolor(RGB(123, 115, 15));
-							break;
-						case 3:
-							setlinecolor(RGB(177, 36, 50));
-							break;
-						default:
-							setlinecolor(RGB(70, 100, 150));
-							break;
-					}
-					setlinestyle(PS_SOLID, 3);
-				}
+    for (int i = 0; i < vertex_number; i++) {
+        const edge_node* current_edge = vertices[i].first_edge;
+        while (current_edge) {
+            if (i < current_edge->to) {
+                if (current_edge->type == edge_type::TRANSFER) {
+                    setlinecolor(RGB(160, 168, 176));
+                    setlinestyle(PS_DASH, 1);
+                }
+                else if (current_edge->type == edge_type::BUS) {
+                    if (current_edge->line_id == 10
+                        || current_edge->line_id == 11) {
+                        setlinecolor(RGB(47, 124, 89));
+                        setlinestyle(PS_DASH, 1);
+                    }
+                    else {
+                        setlinecolor(RGB(33, 118, 163));
+                        setlinestyle(PS_SOLID, 2);
+                    }
+                }
+                else {
+                    switch (current_edge->line_id) {
+                        case 0:
+                            setlinecolor(RGB(111, 75, 126));
+                            break;
+                        case 1:
+                            setlinecolor(RGB(124, 74, 43));
+                            break;
+                        case 2:
+                            setlinecolor(RGB(123, 115, 15));
+                            break;
+                        case 3:
+                            setlinecolor(RGB(177, 36, 50));
+                            break;
+                        default:
+                            setlinecolor(RGB(70, 100, 150));
+                            break;
+                    }
+                    setlinestyle(PS_SOLID, 4);
+                }
 
-				line(vertices[i].x, vertices[i].y,
-					vertices[current_edge->to].x, vertices[current_edge->to].y);
-			}
-			current_edge = current_edge->next;
-		}
-	}
-	setlinestyle(PS_SOLID, 1);
+                draw_schematic_connection(vertices,
+                    i, current_edge->to, current_edge);
+            }
+            current_edge = current_edge->next;
+        }
+    }
+    setlinestyle(PS_SOLID, 1);
 }
 
 /***************************************************************************
@@ -1983,27 +2050,27 @@ void draw_selected_vertices(const vertex vertices[], int vertex_number,
 ***************************************************************************/
 void draw_route_highlight(const vertex vertices[], const ui_state& state)
 {
-	if (!state.route_ready || state.path_vertex_number < 2)
-		return;
+    if (!state.route_ready || state.path_vertex_number < 2)
+        return;
 
-	setlinecolor(RGB(255, 210, 40));
-	setlinestyle(PS_SOLID, 7);
+    setlinecolor(RGB(255, 210, 40));
+    setlinestyle(PS_SOLID, 7);
 
-	for (int i = state.path_vertex_number - 1; i > 0; i--) {
-		int from_vertex = state.path[i];
-		int to_vertex = state.path[i - 1];
-		bool from_is_virtual = from_vertex >= physical_vertex_number;
-		bool to_is_virtual = to_vertex >= physical_vertex_number;
+    for (int i = state.path_vertex_number - 1; i > 0; i--) {
+        int from_vertex = state.path[i];
+        int to_vertex = state.path[i - 1];
+        bool from_is_virtual = from_vertex >= physical_vertex_number;
+        bool to_is_virtual = to_vertex >= physical_vertex_number;
 
-		//物理节点与对应公交状态节点之间只是上下车计费边，不作为乘车指南的一段显示
-		if (from_is_virtual != to_is_virtual)
-			continue;
+        if (from_is_virtual != to_is_virtual)
+            continue;
 
-		line(vertices[from_vertex].x, vertices[from_vertex].y,
-			vertices[to_vertex].x, vertices[to_vertex].y);
-	}
+        const edge_node* route_edge = state.previous_edge[to_vertex];
+        draw_schematic_connection(vertices,
+            from_vertex, to_vertex, route_edge);
+    }
 
-	setlinestyle(PS_SOLID, 1);
+    setlinestyle(PS_SOLID, 1);
 }
 
 /***************************************************************************
