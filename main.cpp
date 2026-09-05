@@ -1437,17 +1437,13 @@ namespace ui_layout
     const int network_left = 35;
     const int network_right = 2020;
     const int network_top = 35;
-    const int network_bottom = 1255;
+    const int network_bottom = 1460;
 
     const int logical_left = 40;
     const int logical_right = 890;
     const int logical_top = 60;
     const int logical_bottom = 610;
 
-    const int campus_list_left = 24;
-    const int campus_list_top = 1280;
-    const int campus_list_right = 2026;
-    const int campus_list_bottom = 1482;
 
     const int jiading_offset_x = 575;
     const int jiading_offset_y = 260;
@@ -1962,6 +1958,121 @@ station_label_rectangle build_station_label_candidate(
 }
 
 /***************************************************************************
+  函数名称：cross_product_for_label
+  功    能：计算线段相交判断使用的二维叉积
+  输入参数：三个屏幕坐标点
+  返 回 值：叉积结果
+  说    明：仅用于总览图站名避让，不参与任何路径算法
+***************************************************************************/
+long long cross_product_for_label(
+    const screen_point& first,
+    const screen_point& second,
+    int x, int y)
+{
+    return static_cast<long long>(second.x - first.x) * (y - first.y)
+        - static_cast<long long>(second.y - first.y) * (x - first.x);
+}
+
+/***************************************************************************
+  函数名称：is_point_on_label_segment
+  功    能：判断一点是否位于给定线段的包围范围内
+  输入参数：线段两个端点与待判断点坐标
+  返 回 值：在范围内返回true
+  说    明：配合叉积处理共线情况
+***************************************************************************/
+bool is_point_on_label_segment(
+    const screen_point& first,
+    const screen_point& second,
+    int x, int y)
+{
+    int min_x = first.x < second.x ? first.x : second.x;
+    int max_x = first.x > second.x ? first.x : second.x;
+    int min_y = first.y < second.y ? first.y : second.y;
+    int max_y = first.y > second.y ? first.y : second.y;
+    return x >= min_x && x <= max_x && y >= min_y && y <= max_y;
+}
+
+/***************************************************************************
+  函数名称：does_segment_intersect_label_side
+  功    能：判断一条运营线路与标签矩形的一条边是否相交
+  输入参数：运营线路端点、矩形边两个端点
+  返 回 值：相交返回true
+  说    明：用于给站名候选位置增加避线惩罚
+***************************************************************************/
+bool does_segment_intersect_label_side(
+    const screen_point& line_first,
+    const screen_point& line_second,
+    const screen_point& side_first,
+    const screen_point& side_second)
+{
+    long long first_cross = cross_product_for_label(
+        line_first, line_second, side_first.x, side_first.y);
+    long long second_cross = cross_product_for_label(
+        line_first, line_second, side_second.x, side_second.y);
+    long long third_cross = cross_product_for_label(
+        side_first, side_second, line_first.x, line_first.y);
+    long long fourth_cross = cross_product_for_label(
+        side_first, side_second, line_second.x, line_second.y);
+
+    if (((first_cross > 0 && second_cross < 0)
+        || (first_cross < 0 && second_cross > 0))
+        && ((third_cross > 0 && fourth_cross < 0)
+        || (third_cross < 0 && fourth_cross > 0)))
+        return true;
+
+    if (first_cross == 0 && is_point_on_label_segment(
+        line_first, line_second, side_first.x, side_first.y))
+        return true;
+    if (second_cross == 0 && is_point_on_label_segment(
+        line_first, line_second, side_second.x, side_second.y))
+        return true;
+    if (third_cross == 0 && is_point_on_label_segment(
+        side_first, side_second, line_first.x, line_first.y))
+        return true;
+    if (fourth_cross == 0 && is_point_on_label_segment(
+        side_first, side_second, line_second.x, line_second.y))
+        return true;
+
+    return false;
+}
+
+/***************************************************************************
+  函数名称：does_network_edge_cross_label
+  功    能：判断一条总览运营线路是否穿过站名标签区域
+  输入参数：线路两个端点、候选标签矩形
+  返 回 值：穿过或进入标签区域返回true
+  说    明：标签区域额外扩张4像素，避免文字虽然没压线但视觉上贴得太近
+***************************************************************************/
+bool does_network_edge_cross_label(
+    const screen_point& first,
+    const screen_point& second,
+    const station_label_rectangle& rectangle)
+{
+    station_label_rectangle expanded = rectangle;
+    expanded.left -= 4;
+    expanded.top -= 4;
+    expanded.right += 4;
+    expanded.bottom += 4;
+
+    auto inside = [&](const screen_point& point) {
+        return point.x >= expanded.left && point.x <= expanded.right
+            && point.y >= expanded.top && point.y <= expanded.bottom;
+    };
+    if (inside(first) || inside(second))
+        return true;
+
+    screen_point top_left{ expanded.left, expanded.top };
+    screen_point top_right{ expanded.right, expanded.top };
+    screen_point bottom_left{ expanded.left, expanded.bottom };
+    screen_point bottom_right{ expanded.right, expanded.bottom };
+
+    return does_segment_intersect_label_side(first, second, top_left, top_right)
+        || does_segment_intersect_label_side(first, second, top_right, bottom_right)
+        || does_segment_intersect_label_side(first, second, bottom_right, bottom_left)
+        || does_segment_intersect_label_side(first, second, bottom_left, top_left);
+}
+
+/***************************************************************************
   函数名称：score_station_label_candidate
   功    能：给一个站名候选位置评分
   输入参数：候选矩形、已放置标签、全部节点和当前站点
@@ -1975,7 +2086,7 @@ int score_station_label_candidate(
 {
     if (candidate.left < 4 || candidate.top < 4
         || candidate.right > ui_layout::map_width - 4
-        || candidate.bottom > ui_layout::campus_list_top - 8)
+        || candidate.bottom > ui_layout::network_bottom - 8)
         return INT_MAX / 4;
 
     int score = distance * 3;
@@ -1998,6 +2109,25 @@ int score_station_label_candidate(
         if (point.x >= candidate.left - 4 && point.x <= candidate.right + 4
             && point.y >= candidate.top - 4 && point.y <= candidate.bottom + 4)
             score += 5000;
+    }
+
+
+    for (int i = 0; i < vertex_number; i++) {
+        const edge_node* current_edge = vertices[i].first_edge;
+        while (current_edge) {
+            if (i < current_edge->to
+                && current_edge->type != edge_type::TRANSFER) {
+                screen_point first_point = get_total_map_point(
+                    vertices, vertex_number, i);
+                screen_point second_point = get_total_map_point(
+                    vertices, vertex_number, current_edge->to);
+
+                if (does_network_edge_cross_label(
+                    first_point, second_point, candidate))
+                    score += 12000;
+            }
+            current_edge = current_edge->next;
+        }
     }
 
     return score;
@@ -2179,50 +2309,6 @@ void draw_all_station_names(const vertex vertices[], int vertex_number)
         placed_rectangles, placed_number,
         vertices, vertex_number, -1);
     draw_station_label(campus_rectangle, campus_label);
-}
-
-/***************************************************************************
-  函数名称：draw_jiading_station_list
-  功    能：在总览图底部列出嘉定校区八个内部节点的完整名称
-  输入参数：const vertex vertices[]：顶点数组
-  返 回 值：无
-  说    明：保证一镜到底时所有站名同时可见，具体选点仍在同一窗口内进入嘉定局部图
-***************************************************************************/
-void draw_jiading_station_list(const vertex vertices[])
-{
-    setfillcolor(RGB(255, 255, 255));
-    solidrectangle(ui_layout::campus_list_left, ui_layout::campus_list_top,
-        ui_layout::campus_list_right, ui_layout::campus_list_bottom);
-    setlinecolor(RGB(205, 214, 224));
-    rectangle(ui_layout::campus_list_left, ui_layout::campus_list_top,
-        ui_layout::campus_list_right, ui_layout::campus_list_bottom);
-
-    set_ui_font(20, FW_BOLD);
-    settextcolor(RGB(42, 55, 70));
-    outtextxy(ui_layout::campus_list_left + 18,
-        ui_layout::campus_list_top + 14, "嘉定校区内部节点");
-
-    const int column_width = 490;
-    const int start_x = ui_layout::campus_list_left + 18;
-    const int start_y = ui_layout::campus_list_top + 54;
-    set_map_font(20);
-
-    for (int i = 56; i <= 63; i++) {
-        int index = i - 56;
-        int column = index % 4;
-        int row = index / 4;
-        int x = start_x + column * column_width;
-        int y = start_y + row * 72;
-
-        setfillcolor(RGB(220, 122, 36));
-        solidcircle(x + 5, y + 8, 3);
-
-        station_label_text label = build_station_label_text(vertices[i].name, 430);
-        settextcolor(RGB(32, 42, 54));
-        outtextxy(x + 14, y, label.first_line.c_str());
-        if (label.line_number == 2)
-            outtextxy(x + 14, y + 22, label.second_line.c_str());
-    }
 }
 
 /***************************************************************************
@@ -2805,7 +2891,6 @@ void draw_control_panel(const vertex vertices[], int vertex_number,
 
     set_ui_font(13);
     settextcolor(RGB(90, 105, 120));
-    outtextxy(left, 412, "总览始终展示全部站名，校内站点见左下角");
 
     draw_button(left, 444, left + 158, 486,
         "开始规划", false, true);
@@ -3006,8 +3091,6 @@ void draw_easyx_interface(const vertex vertices[], int vertex_number,
 
         draw_total_map_vertices(vertices, vertex_number);
         draw_all_station_names(vertices, vertex_number);
-        draw_jiading_station_list(vertices);
-
         if (state.route_ready)
             draw_global_transfer_marks(vertices, vertex_number, state);
 
