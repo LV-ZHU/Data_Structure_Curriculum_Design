@@ -1,0 +1,365 @@
+name: 文字清晰度修复
+
+on:
+  push:
+    branches:
+      - 文字清晰度修复临时分支
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出主分支
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: 修改文字渲染和高DPI处理
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('main.cpp')
+          raw = path.read_bytes()
+          text = raw.decode('gb2312')
+          text = text.replace('\r\n', '\n').replace('\r', '\n')
+
+          def replace_once(old, new, description):
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f'{description}：期望出现1次，实际出现{count}次')
+              text = text.replace(old, new, 1)
+
+          def replace_function(signature, new_code):
+              global text
+              start = text.find(signature)
+              if start < 0:
+                  raise RuntimeError(f'找不到函数：{signature}')
+              brace = text.find('{', start)
+              if brace < 0:
+                  raise RuntimeError(f'找不到函数左花括号：{signature}')
+              depth = 0
+              end = -1
+              for i in range(brace, len(text)):
+                  if text[i] == '{':
+                      depth += 1
+                  elif text[i] == '}':
+                      depth -= 1
+                      if depth == 0:
+                          end = i + 1
+                          break
+              if end < 0:
+                  raise RuntimeError(f'找不到函数右花括号：{signature}')
+              text = text[:start] + new_code.rstrip() + text[end:]
+
+          dpi_helpers = r'''/***************************************************************************
+            函数名称：enable_high_dpi_rendering
+            功    能：在创建EasyX窗口前启用高DPI感知，避免Windows把整张画布作为低分辨率位图放大
+            输入参数：无
+            返 回 值：成功设置进程或线程DPI模式返回true，否则返回false
+            说    明：动态取得Windows 10的DPI接口，避免项目目标版本不同导致编译失败；优先使用Per-Monitor V2
+          ***************************************************************************/
+          bool enable_high_dpi_rendering()
+          {
+              HMODULE user32_module = GetModuleHandleA("user32.dll");
+              if (!user32_module)
+                  return SetProcessDPIAware() != FALSE;
+
+              using set_process_dpi_context_function = BOOL(WINAPI*)(HANDLE);
+              using set_thread_dpi_context_function = HANDLE(WINAPI*)(HANDLE);
+
+              set_process_dpi_context_function set_process_context =
+                  reinterpret_cast<set_process_dpi_context_function>(
+                      GetProcAddress(user32_module, "SetProcessDpiAwarenessContext"));
+              set_thread_dpi_context_function set_thread_context =
+                  reinterpret_cast<set_thread_dpi_context_function>(
+                      GetProcAddress(user32_module, "SetThreadDpiAwarenessContext"));
+
+              HANDLE per_monitor_v2_context =
+                  reinterpret_cast<HANDLE>(static_cast<INT_PTR>(-4));
+
+              bool process_enabled = false;
+              if (set_process_context)
+                  process_enabled =
+                      set_process_context(per_monitor_v2_context) != FALSE;
+
+              HANDLE previous_thread_context = nullptr;
+              if (set_thread_context)
+                  previous_thread_context =
+                      set_thread_context(per_monitor_v2_context);
+
+              if (process_enabled || previous_thread_context != nullptr)
+                  return true;
+
+              return SetProcessDPIAware() != FALSE;
+          }
+
+          /***************************************************************************
+            函数名称：lock_easyx_window_size
+            功    能：锁定EasyX固定像素画布的窗口大小，禁止最大化和拖拽缩放造成二次插值
+            输入参数：无
+            返 回 值：无
+            说    明：程序的地图和控件坐标均以1200乘700固定画布设计，因此只允许移动、最小化和关闭窗口
+          ***************************************************************************/
+          void lock_easyx_window_size()
+          {
+              HWND easyx_window = GetHWnd();
+              if (!easyx_window)
+                  return;
+
+              LONG_PTR window_style =
+                  GetWindowLongPtr(easyx_window, GWL_STYLE);
+              window_style &=
+                  ~static_cast<LONG_PTR>(WS_THICKFRAME | WS_MAXIMIZEBOX);
+              SetWindowLongPtr(easyx_window, GWL_STYLE, window_style);
+
+              SetWindowPos(easyx_window, nullptr,
+                  0, 0, 0, 0,
+                  SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER
+                  | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+          }
+
+          '''
+
+          font_marker = '/***************************************************************************\n  函数名称：set_ui_font'
+          if font_marker not in text:
+              raise RuntimeError('找不到set_ui_font前的注释标记')
+          text = text.replace(font_marker, dpi_helpers + font_marker, 1)
+
+          replace_function(
+              'void set_ui_font(int font_height, int font_weight = FW_NORMAL)',
+              r'''void set_ui_font(int font_height, int font_weight = FW_NORMAL)
+          {
+              LOGFONT text_font = {};
+              text_font.lfHeight = -font_height;
+              text_font.lfWeight = font_weight;
+              text_font.lfCharSet = GB2312_CHARSET;
+              text_font.lfOutPrecision = OUT_TT_PRECIS;
+              text_font.lfClipPrecision = CLIP_DEFAULT_PRECIS;
+              text_font.lfQuality = CLEARTYPE_NATURAL_QUALITY;
+              text_font.lfPitchAndFamily = DEFAULT_PITCH | FF_DONTCARE;
+              std::strncpy(text_font.lfFaceName,
+                  "Microsoft YaHei UI", LF_FACESIZE - 1);
+              text_font.lfFaceName[LF_FACESIZE - 1] = '\0';
+              settextstyle(&text_font);
+          }''')
+
+          set_ui_end_marker = '\n\n/***************************************************************************\n  函数名称：draw_all_edges'
+          map_font_code = r'''
+
+          /***************************************************************************
+            函数名称：set_map_font
+            功    能：设置总览地图站名专用字体
+            输入参数：int font_height：字体高度；int font_weight：字体粗细
+            返 回 值：无
+            说    明：小字号中文使用宋体和ClearType，笔画比连续多次描边的微软雅黑更清晰
+          ***************************************************************************/
+          void set_map_font(int font_height, int font_weight = FW_NORMAL)
+          {
+              LOGFONT text_font = {};
+              text_font.lfHeight = -font_height;
+              text_font.lfWeight = font_weight;
+              text_font.lfCharSet = GB2312_CHARSET;
+              text_font.lfOutPrecision = OUT_TT_PRECIS;
+              text_font.lfClipPrecision = CLIP_DEFAULT_PRECIS;
+              text_font.lfQuality = CLEARTYPE_QUALITY;
+              text_font.lfPitchAndFamily = DEFAULT_PITCH | FF_MODERN;
+              std::strncpy(text_font.lfFaceName,
+                  "SimSun", LF_FACESIZE - 1);
+              text_font.lfFaceName[LF_FACESIZE - 1] = '\0';
+              settextstyle(&text_font);
+          }'''
+          replace_once(set_ui_end_marker,
+              map_font_code + set_ui_end_marker,
+              '插入地图专用字体函数')
+
+          replace_function(
+              'int get_label_overlap_area(const station_label_rectangle& first,',
+              r'''int get_label_overlap_area(const station_label_rectangle& first,
+              const station_label_rectangle& second)
+          {
+              const int safe_gap = 3;
+
+              int first_left = first.left - safe_gap;
+              int first_top = first.top - safe_gap;
+              int first_right = first.right + safe_gap;
+              int first_bottom = first.bottom + safe_gap;
+
+              int second_left = second.left - safe_gap;
+              int second_top = second.top - safe_gap;
+              int second_right = second.right + safe_gap;
+              int second_bottom = second.bottom + safe_gap;
+
+              int overlap_left =
+                  first_left > second_left ? first_left : second_left;
+              int overlap_top =
+                  first_top > second_top ? first_top : second_top;
+              int overlap_right =
+                  first_right < second_right ? first_right : second_right;
+              int overlap_bottom =
+                  first_bottom < second_bottom ? first_bottom : second_bottom;
+
+              if (overlap_left >= overlap_right
+                  || overlap_top >= overlap_bottom)
+                  return 0;
+
+              return (overlap_right - overlap_left)
+                  * (overlap_bottom - overlap_top);
+          }''')
+
+          replace_function(
+              'station_label_rectangle choose_station_label_rectangle(',
+              r'''station_label_rectangle choose_station_label_rectangle(
+              int center_x, int center_y, int text_width, int text_height,
+              const station_label_rectangle placed_rectangles[], int placed_number,
+              const vertex vertices[], int vertex_number, int current_vertex)
+          {
+              const int distances[] = {
+                  10, 20, 32, 46, 62, 80, 98, 118, 140
+              };
+              const int distance_number =
+                  sizeof(distances) / sizeof(distances[0]);
+              station_label_rectangle best_candidate;
+              int best_score = INT_MAX;
+
+              for (int distance_index = 0;
+                  distance_index < distance_number;
+                  distance_index++) {
+                  for (int direction = 0; direction < 8; direction++) {
+                      station_label_rectangle candidate =
+                          build_station_label_candidate(
+                              center_x, center_y,
+                              text_width, text_height,
+                              direction, distances[distance_index]);
+
+                      int score = score_station_label_candidate(
+                          candidate, placed_rectangles, placed_number,
+                          vertices, vertex_number, current_vertex,
+                          distances[distance_index]);
+
+                      if (score < best_score) {
+                          best_score = score;
+                          best_candidate = candidate;
+                      }
+
+                      if (score < 100)
+                          return candidate;
+                  }
+              }
+
+              return best_candidate;
+          }''')
+
+          replace_function(
+              'void draw_outlined_station_text(int x, int y, const string& text)',
+              r'''void draw_outlined_station_text(int x, int y, const string& text)
+          {
+              setbkmode(TRANSPARENT);
+              set_map_font(15);
+
+              int text_width = textwidth(text.c_str());
+              int text_height = textheight(text.c_str());
+
+              //只铺一层极薄的浅色底，不再把同一段文字偏移绘制五次，避免中文笔画发虚。
+              setfillcolor(RGB(247, 250, 252));
+              solidrectangle(x - 2, y - 1,
+                  x + text_width + 2, y + text_height + 1);
+
+              settextcolor(RGB(25, 35, 48));
+              outtextxy(x, y, text.c_str());
+          }''')
+
+          # 全站名布局使用与实际绘制完全一致的15像素宋体计算尺寸。
+          all_names_start = text.find('void draw_all_station_names(')
+          all_names_end = text.find('/***************************************************************************\n  函数名称：draw_global_route_labels', all_names_start)
+          if all_names_start < 0 or all_names_end < 0:
+              raise RuntimeError('找不到draw_all_station_names区域')
+          all_names = text[all_names_start:all_names_end]
+          if 'set_ui_font(13);' not in all_names:
+              raise RuntimeError('draw_all_station_names中找不到原字体设置')
+          all_names = all_names.replace('set_ui_font(13);', 'set_map_font(15);', 1)
+          text = text[:all_names_start] + all_names + text[all_names_end:]
+
+          # 重点站名和嘉定局部图字号略增大。
+          station_box_start = text.find('void draw_station_name_box(')
+          station_box_end = text.find('struct station_label_rectangle', station_box_start)
+          station_box = text[station_box_start:station_box_end]
+          station_box = station_box.replace(
+              'set_ui_font(15, FW_BOLD);',
+              'set_ui_font(16, FW_BOLD);', 1)
+          text = text[:station_box_start] + station_box + text[station_box_end:]
+
+          jiading_start = text.find('void draw_jiading_campus_map(')
+          jiading_end = text.find('/***************************************************************************\n  函数名称：is_point_in_rectangle', jiading_start)
+          jiading = text[jiading_start:jiading_end]
+          if 'set_ui_font(16);' in jiading:
+              jiading = jiading.replace('set_ui_font(16);', 'set_ui_font(17);', 1)
+          text = text[:jiading_start] + jiading + text[jiading_end:]
+
+          # 右侧控制区字号整体提升，ClearType字体只绘制一次。
+          control_start = text.find('void draw_control_panel(')
+          control_end = text.find('/***************************************************************************\n  函数名称：truncate_gb2312_text_to_width', control_start)
+          if control_start < 0 or control_end < 0:
+              raise RuntimeError('找不到draw_control_panel区域')
+          control = text[control_start:control_end]
+          control = control.replace('set_ui_font(14);', 'set_ui_font(16);', 1)
+          control = control.replace('set_ui_font(18);', 'set_ui_font(20, FW_BOLD);', 1)
+          control = control.replace('set_ui_font(14);', 'set_ui_font(15);', 1)
+          control = control.replace('set_ui_font(13);', 'set_ui_font(14);', 1)
+          text = text[:control_start] + control + text[control_end:]
+
+          # 路线结果区保持四段每页，但用更大的单次ClearType文字。
+          result_start = text.find('void draw_route_result(')
+          result_end = text.find('/***************************************************************************\n  函数名称：draw_easyx_interface', result_start)
+          if result_start < 0 or result_end < 0:
+              raise RuntimeError('找不到draw_route_result区域')
+          result = text[result_start:result_end]
+          result = result.replace('set_ui_font(14);', 'set_ui_font(16);', 1)
+          result = result.replace('set_ui_font(13);', 'set_ui_font(15);', 1)
+          result = result.replace('920, 490, 265, 16, 2', '920, 490, 265, 18, 2', 1)
+          result = result.replace('set_ui_font(14, FW_BOLD);', 'set_ui_font(16, FW_BOLD);', 1)
+          result = result.replace('set_ui_font(14);', 'set_ui_font(15);', 1)
+          result = result.replace('set_ui_font(13);', 'set_ui_font(14);', 1)
+          result = result.replace('y + 15', 'y + 16')
+          result = result.replace('y += 30;', 'y += 31;', 1)
+          result = result.replace('set_ui_font(14);', 'set_ui_font(15);', 1)
+          text = text[:result_start] + result + text[result_end:]
+
+          # DPI设置必须发生在任何EasyX窗口创建之前。
+          replace_once(
+              'int main()\n{\n\tstring lines_path',
+              'int main()\n{\n\tenable_high_dpi_rendering();\n\n\tstring lines_path',
+              '在main开头启用高DPI')
+
+          replace_once(
+              '\tSetProcessDPIAware();\n\tinitgraph(1200, 700, EX_SHOWCONSOLE);',
+              '\tinitgraph(1200, 700, EX_SHOWCONSOLE);\n\tlock_easyx_window_size();',
+              '替换旧DPI调用并锁定窗口')
+
+          # 写回时严格保证GB2312和Windows CRLF。
+          if '\r' in text:
+              raise RuntimeError('内部文本仍含孤立回车')
+          output = text.replace('\n', '\r\n').encode('gb2312')
+          path.write_bytes(output)
+
+          # 最终自检。
+          checked = path.read_bytes()
+          checked.decode('gb2312')
+          if b'\n' in checked.replace(b'\r\n', b''):
+              raise RuntimeError('发现非CRLF换行')
+          print('main.cpp 已按GB2312 + CRLF写回')
+          print('字节数：', len(checked))
+          PY
+
+          git config user.name "LV-ZHU"
+          git config user.email "212522225+LV-ZHU@users.noreply.github.com"
+          git add main.cpp
+          git diff --cached --stat
+          git commit -m "让文字更清晰"
+          git push origin HEAD:main
