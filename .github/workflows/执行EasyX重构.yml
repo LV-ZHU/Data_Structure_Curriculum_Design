@@ -35,20 +35,28 @@ jobs:
           decoded_prefix = base64.b64decode(padded_prefix).decode('utf-8', errors='ignore')
           raw_suffix = payload[len(prefix):]
           script = decoded_prefix + raw_suffix
+
           needle = 'text = path.read_bytes().decode("gb2312")\n'
           if needle not in script:
               raise RuntimeError('找不到源码读取语句')
           script = script.replace(needle, needle + 'text = text.replace("\\r\\n", "\\n").replace("\\r", "\\n")\n', 1)
-          marker_pattern = r'ui_start_marker\s*=.*?ui_end\s*=\s*text\.index\(ui_end_marker\)\n'
-          marker_replacement = 'ui_function_position = text.index("bool enable_high_dpi_rendering()")\nui_start = text.rfind("/***************************************************************************", 0, ui_function_position)\nui_end_function_position = text.index("void invalidate_route_result")\nui_end = text.rfind("/***************************************************************************", 0, ui_end_function_position)\n'
-          script, count = re.subn(marker_pattern, marker_replacement, script, count=1, flags=re.S)
-          if count != 1:
-              raise RuntimeError('替换EasyX区域定位逻辑失败')
-          input_pattern = r'input_start_marker\s*=.*?input_start\s*=\s*text\.index\(input_start_marker\)\n'
-          input_replacement = 'input_function_position = text.index("void handle_left_click(")\ninput_start = text.rfind("/***************************************************************************", 0, input_function_position)\n'
-          script, count = re.subn(input_pattern, input_replacement, script, count=1, flags=re.S)
-          if count != 1:
-              raise RuntimeError('替换输入区域定位逻辑失败')
+
+          ui_start_pos = script.index('ui_start_marker =')
+          ui_end_line = 'ui_end = text.index(ui_end_marker)'
+          ui_end_pos = script.index(ui_end_line, ui_start_pos) + len(ui_end_line)
+          while ui_end_pos < len(script) and script[ui_end_pos] in '\r\n':
+              ui_end_pos += 1
+          ui_replacement = 'ui_function_position = text.index("bool enable_high_dpi_rendering()")\nui_start = text.rfind("/***************************************************************************", 0, ui_function_position)\nui_end_function_position = text.index("void invalidate_route_result")\nui_end = text.rfind("/***************************************************************************", 0, ui_end_function_position)\n'
+          script = script[:ui_start_pos] + ui_replacement + script[ui_end_pos:]
+
+          input_start_pos = script.index('input_start_marker =')
+          input_end_line = 'main_position = text.index("int main()", input_start)'
+          input_end_pos = script.index(input_end_line, input_start_pos) + len(input_end_line)
+          while input_end_pos < len(script) and script[input_end_pos] in '\r\n':
+              input_end_pos += 1
+          input_replacement = 'input_function_position = text.index("void handle_left_click(")\ninput_start = text.rfind("/***************************************************************************", 0, input_function_position)\nmain_position = text.index("int main()", input_start)\n'
+          script = script[:input_start_pos] + input_replacement + script[input_end_pos:]
+
           Path('/tmp/refactor.py').write_text(script, encoding='utf-8')
           compile(script, '/tmp/refactor.py', 'exec')
           print('重构脚本恢复完成，字节数：', len(script.encode('utf-8')))
