@@ -59,6 +59,17 @@ struct transit_line {
 	string name = "";//线路中文名称
 	edge_type type= edge_type::METRO;//线路类型，默认为地铁，只允许是地铁/公交类型不允许为换乘
 };
+//路线阶段：把Dijkstra原始边压缩成用户真正看到的一整段行程
+struct route_segment {
+	int start_vertex = -1;//本段起点物理顶点编号
+	int end_vertex = -1;//本段终点物理顶点编号
+	edge_type type = edge_type::TRANSFER;//地铁、公交或换乘
+	int line_id = -1;//地铁/公交线路编号，步行/骑行保持-1
+	bool use_bike = false;//TRANSFER边实际是否选择骑行
+	int time_cost = 0;//本段累计耗时
+	double fare_cost = 0;//本段累计费用
+	int station_edge_number = 0;//本段真正跨越的物理站间边数量
+};
 //嘉定部分
 struct jiading_map_node {
 	int vertex_id = -1;       //原图中的物理顶点编号
@@ -83,6 +94,12 @@ struct ui_state {
 	const edge_node* previous_edge[max_vertices];
 	int path[max_vertices];
 	int path_vertex_number = 0;
+
+	route_segment segments[max_vertices];
+	int segment_number = 0;
+	int guide_page = 0;
+	int stop_number = 0;
+	int hovered_vertex = -1;
 	
 	int total_time_cost = 0;
 	double total_fare_cost = 0;
@@ -840,12 +857,6 @@ bool load_edges(const string& file_path, vertex vertices[], int vertex_number, c
 			}
 		}
 		
-			
-		
-		
-
-	
-
 #if test_csv_lines
 		cout << "边的一端顶点编号为：" << first_vertex_id << endl;
 		cout << "边的另一端顶点编号为：" << second_vertex_id << endl;
@@ -855,8 +866,6 @@ bool load_edges(const string& file_path, vertex vertices[], int vertex_number, c
 		cout << "线路编号为：" << line_id << endl;
 		cout << "边骑行时长为：" << bike_time_cost << endl;
 #endif	
-
-
 
 		add_undirected_edge(vertices[first_vertex_id], vertices[second_vertex_id],
 			time_cost, fare_cost, parsed_edge_type, line_id, bike_time_cost);
@@ -1134,6 +1143,253 @@ bool calculate_arrival_time(int start_hour, int start_minute, int total_minutes,
 }
 
 /***************************************************************************
+  函数名称：map_to_physical_vertex
+  功    能：把公交虚拟状态节点映射回对应的可见物理节点
+  输入参数：const vertex vertices[]：顶点数组
+  int vertex_number：顶点数量
+  int vertex_id：待映射顶点编号
+  返 回 值：成功返回物理节点编号，失败返回-1
+  说    明：前92个节点直接返回自身；虚拟节点根据名称和总览坐标寻找对应物理节点
+***************************************************************************/
+int map_to_physical_vertex(const vertex vertices[], int vertex_number,
+	int vertex_id)
+{
+	if (!is_valid_vertex_id(vertex_id, vertex_number))
+		return -1;
+
+	if (vertex_id < physical_vertex_number)
+		return vertex_id;
+
+	int physical_limit = physical_vertex_number;
+	if (vertex_number < physical_limit)
+		physical_limit = vertex_number;
+
+	for (int i = 0; i < physical_limit; i++) {
+		if (vertices[vertex_id].name == vertices[i].name
+			&& vertices[vertex_id].x == vertices[i].x
+			&& vertices[vertex_id].y == vertices[i].y)
+			return i;
+	}
+
+	return -1;
+}
+
+/***************************************************************************
+  函数名称：build_route_segments
+  功    能：把Dijkstra原始path压缩成用户可读的路线阶段，并统计去重后的经停站数
+  输入参数：const vertex vertices[]：顶点数组
+  int vertex_number：顶点数量
+  const int path[]：终点到起点的倒序路径数组
+  int path_vertex_number：路径顶点数量
+  const edge_node* previous_edge[]：Dijkstra实际采用的前驱边
+  bool allow_bike：是否允许骑行
+  route_segment segments[]：输出路线阶段数组
+  int& segment_number：输出路线阶段数量
+  int& stop_number：输出全程经停站数
+  返 回 值：成功返回true，路径映射或前驱边异常返回false
+  说    明：同type+line_id连续合并；步行和骑行分别合并；同物理点公交状态边累计成本但不增加站间数
+***************************************************************************/
+bool build_route_segments(const vertex vertices[], int vertex_number,
+	const int path[], int path_vertex_number,
+	const edge_node* previous_edge[], bool allow_bike,
+	route_segment segments[], int& segment_number,
+	int& stop_number)
+{
+	segment_number = 0;
+	stop_number = 0;
+
+	if (path_vertex_number < 2 || path_vertex_number > vertex_number)
+		return false;
+
+	int physical_path_number = 0;
+	int last_physical_vertex = -1;
+
+	for (int i = path_vertex_number - 1; i >= 0; i--) {
+		int physical_vertex =
+			map_to_physical_vertex(vertices, vertex_number, path[i]);
+
+		if (physical_vertex < 0)
+			return false;
+
+		if (physical_vertex != last_physical_vertex) {
+			physical_path_number++;
+			last_physical_vertex = physical_vertex;
+		}
+	}
+
+	if (physical_path_number > 2)
+		stop_number = physical_path_number - 2;
+
+	for (int i = path_vertex_number - 1; i > 0; i--) {
+		int raw_from_vertex = path[i];
+		int raw_to_vertex = path[i - 1];
+		const edge_node* current_edge = previous_edge[raw_to_vertex];
+
+		if (!current_edge)
+			return false;
+
+		int physical_from_vertex =
+			map_to_physical_vertex(vertices, vertex_number,
+				raw_from_vertex);
+		int physical_to_vertex =
+			map_to_physical_vertex(vertices, vertex_number,
+				raw_to_vertex);
+
+		if (physical_from_vertex < 0 || physical_to_vertex < 0)
+			return false;
+
+		int effective_time =
+			get_effective_time_cost(*current_edge, allow_bike);
+		bool use_bike =
+			current_edge->type == edge_type::TRANSFER
+			&& effective_time < current_edge->time_cost;
+
+		bool can_merge = false;
+		if (segment_number > 0) {
+			route_segment& last_segment = segments[segment_number - 1];
+
+			can_merge =
+				last_segment.type == current_edge->type
+				&& last_segment.line_id == current_edge->line_id
+				&& last_segment.end_vertex == physical_from_vertex;
+
+			if (current_edge->type == edge_type::TRANSFER
+				&& last_segment.use_bike != use_bike)
+				can_merge = false;
+		}
+
+		if (can_merge) {
+			route_segment& last_segment = segments[segment_number - 1];
+			last_segment.end_vertex = physical_to_vertex;
+			last_segment.time_cost += effective_time;
+			last_segment.fare_cost += current_edge->fare_cost;
+			if (physical_from_vertex != physical_to_vertex)
+				last_segment.station_edge_number++;
+		}
+		else {
+			if (segment_number >= max_vertices)
+				return false;
+
+			route_segment& new_segment = segments[segment_number];
+			new_segment = route_segment{};
+			new_segment.start_vertex = physical_from_vertex;
+			new_segment.end_vertex = physical_to_vertex;
+			new_segment.type = current_edge->type;
+			new_segment.line_id = current_edge->line_id;
+			new_segment.use_bike = use_bike;
+			new_segment.time_cost = effective_time;
+			new_segment.fare_cost = current_edge->fare_cost;
+			if (physical_from_vertex != physical_to_vertex)
+				new_segment.station_edge_number = 1;
+			segment_number++;
+		}
+	}
+
+	return segment_number > 0;
+}
+
+/***************************************************************************
+  函数名称：is_public_transport_segment
+  功    能：判断路线阶段是否属于公共交通阶段
+  输入参数：const route_segment& segment：路线阶段
+  返 回 值：地铁或公交返回true，步行/骑行返回false
+  说    明：换乘次数只在前后两段公共交通之间产生
+***************************************************************************/
+bool is_public_transport_segment(const route_segment& segment)
+{
+	return segment.type == edge_type::METRO
+		|| segment.type == edge_type::BUS;
+}
+
+/***************************************************************************
+  函数名称：get_transfer_count
+  功    能：根据压缩后的路线阶段统计真正的换乘次数
+  输入参数：const ui_state& state：当前路线状态
+  返 回 值：换乘次数
+  说    明：开头或结尾的步行不算换乘；只有后续再次进入公共交通时才增加一次
+***************************************************************************/
+int get_transfer_count(const ui_state& state)
+{
+	int transfer_count = 0;
+	int previous_public_segment = -1;
+
+	for (int i = 0; i < state.segment_number; i++) {
+		if (!is_public_transport_segment(state.segments[i]))
+			continue;
+
+		if (previous_public_segment >= 0)
+			transfer_count++;
+
+		previous_public_segment = i;
+	}
+
+	return transfer_count;
+}
+
+/***************************************************************************
+  函数名称：get_guide_station_name
+  功    能：生成右栏路线指南使用的紧凑站名
+  输入参数：const vertex vertices[]：顶点数组
+  int vertex_id：物理顶点编号
+  返 回 值：去掉括号线路后缀后的站名
+  说    明：完整名称仍通过地图常显标签和鼠标悬停提示提供
+***************************************************************************/
+string get_guide_station_name(const vertex vertices[], int vertex_id)
+{
+	if (vertex_id < 0 || vertex_id >= physical_vertex_number)
+		return "未知站点";
+
+	string name = vertices[vertex_id].name;
+	size_t bracket_position = name.find("（");
+	if (bracket_position != string::npos)
+		name = name.substr(0, bracket_position);
+
+	return name;
+}
+
+/***************************************************************************
+  函数名称：get_transfer_summary
+  功    能：生成右栏换乘站/步行接驳位置摘要
+  输入参数：const vertex vertices[]：顶点数组
+  const ui_state& state：当前路线状态
+  返 回 值：多个换乘位置用顿号连接的字符串
+  说    明：同站换线只显示一个站名；步行接驳显示A->B
+***************************************************************************/
+string get_transfer_summary(const vertex vertices[], const ui_state& state)
+{
+	string summary;
+	int previous_public_segment = -1;
+
+	for (int i = 0; i < state.segment_number; i++) {
+		if (!is_public_transport_segment(state.segments[i]))
+			continue;
+
+		if (previous_public_segment >= 0) {
+			int from_vertex =
+				state.segments[previous_public_segment].end_vertex;
+			int to_vertex = state.segments[i].start_vertex;
+
+			string from_name =
+				get_guide_station_name(vertices, from_vertex);
+			string to_name =
+				get_guide_station_name(vertices, to_vertex);
+
+			if (!summary.empty())
+				summary += "、";
+
+			if (from_vertex == to_vertex || from_name == to_name)
+				summary += from_name;
+			else
+				summary += from_name + "->" + to_name;
+		}
+
+		previous_public_segment = i;
+	}
+
+	return summary;
+}
+
+/***************************************************************************
   函数名称：draw_all_edges
   功    能：在EasyX窗口中绘制当前邻接表里的全部无向边
   输入参数：const vertex vertices[]：顶点数组
@@ -1194,7 +1450,7 @@ void draw_all_edges(const vertex vertices[], int vertex_number)
   输入参数：const vertex vertices[]：顶点数组
   int vertex_number：顶点数量
   返 回 值：无
-  说    明：地铁站使用蓝色边框，公交/地点节点使用橙色边框；本阶段暂不绘制站名
+  说    明：地铁站使用蓝色边框，公交/地点节点使用橙色边框；默认不永久绘制全部站名
 ***************************************************************************/
 void draw_all_vertices(const vertex vertices[], int vertex_number)
 {
@@ -1291,6 +1547,70 @@ const jiading_map_node* find_jiading_map_node(
 	return nullptr;
 }
 
+/***************************************************************************
+  函数名称：draw_transfer_star
+  功    能：在指定地图坐标绘制换乘红色星号
+  输入参数：int x, int y：换乘节点圆心坐标
+  返 回 值：无
+  说    明：使用ASCII星号保证CP936/MBCS工程稳定保存和显示
+***************************************************************************/
+void draw_transfer_star(int x, int y)
+{
+	setbkmode(TRANSPARENT);
+	settextstyle(24, 0, "微软雅黑");
+	settextcolor(RGB(220, 40, 40));
+	outtextxy(x - 6, y - 18, "*");
+}
+
+/***************************************************************************
+  函数名称：draw_jiading_transfer_marks
+  功    能：在嘉定局部图中绘制当前路线的换乘星号
+  输入参数：const vertex vertices[]：总图顶点数组
+  const jiading_map_node map_nodes[]：局部图节点
+  int map_node_number：局部图节点数量
+  const ui_state& state：当前路线状态
+  返 回 值：无
+  说    明：步行接驳前后两个公共交通端点不同则两个端点都标记；局部图外节点自动跳过
+***************************************************************************/
+void draw_jiading_transfer_marks(
+	const vertex vertices[],
+	const jiading_map_node map_nodes[],
+	int map_node_number,
+	const ui_state& state)
+{
+	bool marked[physical_vertex_number] = { false };
+	int previous_public_segment = -1;
+
+	for (int i = 0; i < state.segment_number; i++) {
+		if (!is_public_transport_segment(state.segments[i]))
+			continue;
+
+		if (previous_public_segment >= 0) {
+			int first_vertex =
+				state.segments[previous_public_segment].end_vertex;
+			int second_vertex = state.segments[i].start_vertex;
+
+			if (first_vertex >= 0 && first_vertex < physical_vertex_number)
+				marked[first_vertex] = true;
+			if (second_vertex >= 0 && second_vertex < physical_vertex_number)
+				marked[second_vertex] = true;
+		}
+
+		previous_public_segment = i;
+	}
+
+	for (int i = 0; i < physical_vertex_number; i++) {
+		if (!marked[i])
+			continue;
+
+		const jiading_map_node* node =
+			find_jiading_map_node(vertices, map_nodes,
+				map_node_number, i);
+
+		if (node)
+			draw_transfer_star(node->x, node->y);
+	}
+}
 
 /***************************************************************************
   函数名称：draw_jiading_route_highlight
@@ -1419,7 +1739,13 @@ void draw_jiading_campus_map(
 			6);
 	}
 
-	//4、5. 标签
+	//4. 换乘特殊标记
+	if (state.route_ready)
+		draw_jiading_transfer_marks(
+			vertices, map_nodes,
+			map_node_number, state);
+
+	//5. 标签
 	settextstyle(16, 0, "微软雅黑");
 	setbkmode(TRANSPARENT);
 
@@ -1484,9 +1810,6 @@ void draw_jiading_campus_map(
 			end_node->y, 9);
 	}
 }
-
-
-
 
 /***************************************************************************
   函数名称：is_point_in_rectangle
@@ -1556,7 +1879,7 @@ void draw_route_highlight(const vertex vertices[], const ui_state& state)
 		bool from_is_virtual = from_vertex >= physical_vertex_number;
 		bool to_is_virtual = to_vertex >= physical_vertex_number;
 
-		//物理节点与对应公交状态节点之间只是上下车计费边，不作为乘车指南的一段显示
+		//物理节点与对应公交状态节点之间只是上下车计费边，不作为地图路线的一段显示
 		if (from_is_virtual != to_is_virtual)
 			continue;
 
@@ -1565,6 +1888,162 @@ void draw_route_highlight(const vertex vertices[], const ui_state& state)
 	}
 
 	setlinestyle(PS_SOLID, 1);
+}
+
+/***************************************************************************
+  函数名称：draw_global_transfer_marks
+  功    能：在全市总览图中绘制路线换乘红色星号
+  输入参数：const vertex vertices[]：顶点数组
+  const ui_state& state：当前路线状态
+  返 回 值：无
+  说    明：直接换线标一个点；步行接驳的两个公共交通边界不同则两端都标记
+***************************************************************************/
+void draw_global_transfer_marks(const vertex vertices[], const ui_state& state)
+{
+	bool marked[physical_vertex_number] = { false };
+	int previous_public_segment = -1;
+
+	for (int i = 0; i < state.segment_number; i++) {
+		if (!is_public_transport_segment(state.segments[i]))
+			continue;
+
+		if (previous_public_segment >= 0) {
+			int first_vertex =
+				state.segments[previous_public_segment].end_vertex;
+			int second_vertex = state.segments[i].start_vertex;
+
+			if (first_vertex >= 0 && first_vertex < physical_vertex_number)
+				marked[first_vertex] = true;
+			if (second_vertex >= 0 && second_vertex < physical_vertex_number)
+				marked[second_vertex] = true;
+		}
+
+		previous_public_segment = i;
+	}
+
+	for (int i = 0; i < physical_vertex_number; i++) {
+		if (marked[i])
+			draw_transfer_star(vertices[i].x, vertices[i].y);
+	}
+}
+
+/***************************************************************************
+  函数名称：draw_station_name_box
+  功    能：在地图节点附近绘制带白底的完整站名
+  输入参数：const string& text：站名
+  int center_x, int center_y：对应节点圆心坐标
+  返 回 值：无
+  说    明：标签自动限制在左侧900×700地图区域内
+***************************************************************************/
+void draw_station_name_box(const string& text, int center_x, int center_y)
+{
+	setbkmode(TRANSPARENT);
+	settextstyle(13, 0, "微软雅黑");
+
+	int text_width = textwidth(text.c_str());
+	int text_height = textheight(text.c_str());
+	int left = center_x + 8;
+	int top = center_y - text_height - 8;
+
+	if (left + text_width + 8 > 895)
+		left = center_x - text_width - 12;
+	if (left < 2)
+		left = 2;
+	if (top < 2)
+		top = center_y + 8;
+	if (top + text_height + 6 > 698)
+		top = 698 - text_height - 6;
+
+	int right = left + text_width + 8;
+	int bottom = top + text_height + 6;
+
+	setfillcolor(RGB(255, 255, 255));
+	solidrectangle(left, top, right, bottom);
+	setlinecolor(RGB(150, 160, 170));
+	rectangle(left, top, right, bottom);
+	settextcolor(RGB(35, 45, 60));
+	outtextxy(left + 4, top + 3, text.c_str());
+}
+
+/***************************************************************************
+  函数名称：draw_global_route_labels
+  功    能：在全市总览图中常显起点、终点和换乘节点完整名称
+  输入参数：const vertex vertices[]：顶点数组
+  const ui_state& state：当前路线状态
+  返 回 值：无
+  说    明：其余站名由鼠标悬停显示，避免92个标签永久重叠
+***************************************************************************/
+void draw_global_route_labels(const vertex vertices[], const ui_state& state)
+{
+	bool marked[physical_vertex_number] = { false };
+
+	if (state.start_vertex >= 0 && state.start_vertex < physical_vertex_number)
+		marked[state.start_vertex] = true;
+	if (state.end_vertex >= 0 && state.end_vertex < physical_vertex_number)
+		marked[state.end_vertex] = true;
+
+	if (state.route_ready) {
+		int previous_public_segment = -1;
+
+		for (int i = 0; i < state.segment_number; i++) {
+			if (!is_public_transport_segment(state.segments[i]))
+				continue;
+
+			if (previous_public_segment >= 0) {
+				int first_vertex =
+					state.segments[previous_public_segment].end_vertex;
+				int second_vertex = state.segments[i].start_vertex;
+
+				if (first_vertex >= 0 && first_vertex < physical_vertex_number)
+					marked[first_vertex] = true;
+				if (second_vertex >= 0 && second_vertex < physical_vertex_number)
+					marked[second_vertex] = true;
+			}
+
+			previous_public_segment = i;
+		}
+	}
+
+	for (int i = 0; i < physical_vertex_number; i++) {
+		if (marked[i])
+			draw_station_name_box(vertices[i].name,
+				vertices[i].x, vertices[i].y);
+	}
+}
+
+/***************************************************************************
+  函数名称：draw_hovered_station
+  功    能：显示当前鼠标悬停节点的完整名称
+  输入参数：const vertex vertices[]：总图顶点数组
+  const jiading_map_node map_nodes[]：嘉定局部图节点数组
+  int map_node_number：局部图节点数量
+  const ui_state& state：当前界面状态
+  返 回 值：无
+  说    明：总览使用vertex坐标；嘉定图使用局部坐标
+***************************************************************************/
+void draw_hovered_station(const vertex vertices[],
+	const jiading_map_node map_nodes[], int map_node_number,
+	const ui_state& state)
+{
+	if (state.hovered_vertex < 0
+		|| state.hovered_vertex >= physical_vertex_number)
+		return;
+
+	if (state.is_jiading_campus) {
+		const jiading_map_node* node =
+			find_jiading_map_node(vertices, map_nodes,
+				map_node_number, state.hovered_vertex);
+		if (!node)
+			return;
+
+		draw_station_name_box(vertices[state.hovered_vertex].name,
+			node->x, node->y);
+	}
+	else {
+		draw_station_name_box(vertices[state.hovered_vertex].name,
+			vertices[state.hovered_vertex].x,
+			vertices[state.hovered_vertex].y);
+	}
 }
 
 /***************************************************************************
@@ -1670,19 +2149,21 @@ void draw_control_panel(const vertex vertices[], int vertex_number,
 	settextcolor(RGB(35, 45, 60));
 	outtextxy(1090, 390, "重置");
 
-	outtextxy(920, 450, "当前状态：");
-	outtextxy(920, 480, state.message.c_str());
+	settextstyle(14, 0, "微软雅黑");
+	settextcolor(RGB(35, 45, 60));
+	outtextxy(920, 435, "状态：");
+	outtextxy(965, 435, state.message.c_str());
 }
 
 /***************************************************************************
   函数名称：draw_route_result
-  功    能：在右侧面板绘制当前规划路线的时间、费用、到达时间和简要路线指南
+  功    能：在右侧面板绘制路线统计、换乘信息和分页后的详细路线阶段
   输入参数：const vertex vertices[]：顶点数组
   const transit_line lines[]：线路数组
   int line_number：线路数量
   const ui_state& state：当前EasyX界面状态
   返 回 值：无
-  说    明：第一版最多绘制三段路线指南，过长路线后续再加入分页或自动换行
+  说    明：每页显示两个route_segment；翻页仅修改guide_page，不重新运行Dijkstra
 ***************************************************************************/
 void draw_route_result(const vertex vertices[],
 	const transit_line lines[], int line_number,
@@ -1691,84 +2172,144 @@ void draw_route_result(const vertex vertices[],
 	if (!state.route_ready)
 		return;
 
+	setbkmode(TRANSPARENT);
 	settextcolor(RGB(35, 45, 60));
-	settextstyle(16, 0, "微软雅黑");
+	settextstyle(14, 0, "微软雅黑");
 
 	stringstream result_stream;
+	string result_text;
 
 	result_stream << "总时间：" << state.total_time_cost << "分钟";
-	string result_text = result_stream.str();
-	outtextxy(920, 520, result_text.c_str());
+	result_text = result_stream.str();
+	outtextxy(920, 458, result_text.c_str());
 
 	result_stream.str("");
 	result_stream.clear();
-
 	result_stream << fixed << setprecision(2)
 		<< "总费用：" << state.total_fare_cost << "元";
 	result_text = result_stream.str();
-	outtextxy(920, 545, result_text.c_str());
+	outtextxy(920, 477, result_text.c_str());
 
 	result_stream.str("");
 	result_stream.clear();
-
 	result_stream << "预计到达："
 		<< setw(2) << setfill('0') << state.arrival_hour
 		<< ":" << setw(2) << state.arrival_minute;
-
 	if (state.days_passed > 0)
 		result_stream << " +" << state.days_passed << "天";
-
 	result_text = result_stream.str();
-	outtextxy(920, 570, result_text.c_str());
+	outtextxy(920, 496, result_text.c_str());
 
-	int guide_number = 1;
-	int y = 600;
+	result_stream.str("");
+	result_stream.clear();
+	result_stream << "经停站数：" << state.stop_number << "站";
+	result_text = result_stream.str();
+	outtextxy(920, 515, result_text.c_str());
 
-	for (int i = state.path_vertex_number - 1;
-		i > 0 && guide_number <= 3; i--) {
+	int transfer_count = get_transfer_count(state);
+	result_stream.str("");
+	result_stream.clear();
+	result_stream << "换乘：" << transfer_count << "次";
+	result_text = result_stream.str();
+	outtextxy(920, 534, result_text.c_str());
 
-		int from_vertex = state.path[i];
-		int to_vertex = state.path[i - 1];
+	if (transfer_count > 0) {
+		string transfer_summary = get_transfer_summary(vertices, state);
+		settextstyle(11, 0, "微软雅黑");
+		outtextxy(920, 553,
+			("换乘点：" + transfer_summary).c_str());
+	}
 
-		const edge_node* current_edge = state.previous_edge[to_vertex];
+	settextstyle(13, 0, "微软雅黑");
+	outtextxy(920, 572, "详细路线：");
 
-		if (!current_edge)
-			continue;
+	const int segments_per_page = 2;
+	int total_pages =
+		(state.segment_number + segments_per_page - 1)
+		/ segments_per_page;
+	int first_segment = state.guide_page * segments_per_page;
+	int last_segment = first_segment + segments_per_page;
+	if (last_segment > state.segment_number)
+		last_segment = state.segment_number;
 
-		string way_text;
-
-		if (current_edge->type == edge_type::TRANSFER) {
-			if (get_effective_time_cost(*current_edge,
-				state.allow_bike) < current_edge->time_cost)
-				way_text = "骑行";
-			else
-				way_text = "步行";
-		}
-		else if (current_edge->line_id >= 0
-			&& current_edge->line_id < line_number) {
-
-			way_text = lines[current_edge->line_id].name;
-		}
+	int y = 592;
+	for (int i = first_segment; i < last_segment; i++) {
+		const route_segment& segment = state.segments[i];
 
 		result_stream.str("");
 		result_stream.clear();
+		result_stream << (i + 1) << ". ";
 
-		result_stream << guide_number << ". "
-			<< way_text << " -> "
-			<< vertices[to_vertex].name;
+		if (segment.type == edge_type::TRANSFER) {
+			if (segment.use_bike)
+				result_stream << "骑行";
+			else
+				result_stream << "步行";
+		}
+		else if (segment.line_id >= 0
+			&& segment.line_id < line_number) {
+			result_stream << "乘坐" << lines[segment.line_id].name;
+		}
+		else {
+			result_stream << "公共交通";
+		}
 
 		result_text = result_stream.str();
-
+		settextstyle(13, 0, "微软雅黑");
 		outtextxy(920, y, result_text.c_str());
 
-		y += 25;
-		guide_number++;
+		result_stream.str("");
+		result_stream.clear();
+		result_stream
+			<< get_guide_station_name(vertices, segment.start_vertex)
+			<< " -> "
+			<< get_guide_station_name(vertices, segment.end_vertex)
+			<< "，" << segment.time_cost << "分钟";
+
+		if (is_public_transport_segment(segment)) {
+			result_stream << "，" << fixed << setprecision(2)
+				<< segment.fare_cost << "元";
+
+			int intermediate_stop_number =
+				segment.station_edge_number - 1;
+			if (intermediate_stop_number > 0)
+				result_stream << "，经停"
+					<< intermediate_stop_number << "站";
+		}
+
+		result_text = result_stream.str();
+		settextstyle(11, 0, "微软雅黑");
+		outtextxy(928, y + 16, result_text.c_str());
+
+		y += 38;
 	}
 
-	if (state.path_vertex_number - 1 > 3)
-		outtextxy(920, y, "...");
-}
+	if (total_pages < 1)
+		total_pages = 1;
 
+	settextstyle(13, 0, "微软雅黑");
+	setlinecolor(RGB(150, 160, 170));
+	setfillcolor(RGB(245, 247, 250));
+
+	if (state.guide_page > 0) {
+		solidrectangle(930, 670, 970, 695);
+		rectangle(930, 670, 970, 695);
+		outtextxy(946, 674, "<");
+	}
+
+	if (state.guide_page + 1 < total_pages) {
+		solidrectangle(1130, 670, 1170, 695);
+		rectangle(1130, 670, 1170, 695);
+		outtextxy(1146, 674, ">");
+	}
+
+	result_stream.str("");
+	result_stream.clear();
+	result_stream << (state.guide_page + 1)
+		<< " / " << total_pages;
+	result_text = result_stream.str();
+	outtextxy(1025, 674, result_text.c_str());
+}
 
 /***************************************************************************
   函数名称：draw_easyx_interface
@@ -1816,9 +2357,17 @@ void draw_easyx_interface(
 
 		draw_all_vertices(vertices, vertex_number);
 
+		if (state.route_ready)
+			draw_global_transfer_marks(vertices, state);
+
 		draw_selected_vertices(
 			vertices, vertex_number, state);
+
+		draw_global_route_labels(vertices, state);
 	}
+
+	draw_hovered_station(
+		vertices, map_nodes, map_node_number, state);
 
 	//两种模式共有的右侧区域
 	setlinecolor(RGB(190, 200, 210));
@@ -1836,12 +2385,34 @@ void draw_easyx_interface(
 
 	FlushBatchDraw();
 }
+
+/***************************************************************************
+  函数名称：invalidate_route_result
+  功    能：让当前规划结果及其派生显示状态全部失效
+  输入参数：ui_state& state：需要修改的界面状态
+  返 回 值：无
+  说    明：修改起终点、时间、策略或骑行选项后统一调用，避免残留旧路线阶段和页码
+***************************************************************************/
+void invalidate_route_result(ui_state& state)
+{
+	state.route_ready = false;
+	state.path_vertex_number = 0;
+	state.segment_number = 0;
+	state.guide_page = 0;
+	state.stop_number = 0;
+	state.total_time_cost = 0;
+	state.total_fare_cost = 0;
+	state.arrival_hour = 0;
+	state.arrival_minute = 0;
+	state.days_passed = 0;
+}
+
 /***************************************************************************
   函数名称：reset_ui_state
   功    能：把EasyX界面状态恢复到程序启动时的默认状态
   输入参数：ui_state& state：需要重置的界面状态
   返 回 值：无
-  说    明：数组中的旧数据无需逐项清零，只要路径长度归零且route_ready为false即可视为无效
+  说    明：数组中的旧数据无需逐项清零，只要对应数量归零且route_ready为false即可视为无效
 ***************************************************************************/
 void reset_ui_state(ui_state& state)
 {
@@ -1854,17 +2425,10 @@ void reset_ui_state(ui_state& state)
 
 	state.start_hour = 8;
 	state.start_minute = 30;
+	state.hovered_vertex = -1;
 
-	state.path_vertex_number = 0;
+	invalidate_route_result(state);
 
-	state.total_time_cost = 0;
-	state.total_fare_cost = 0;
-
-	state.arrival_hour = 0;
-	state.arrival_minute = 0;
-	state.days_passed = 0;
-
-	state.route_ready = false;
 	state.message = "请选择起点";
 }
 
@@ -1875,16 +2439,12 @@ void reset_ui_state(ui_state& state)
   int vertex_number：顶点数量
   ui_state& state：当前EasyX界面状态，规划结果写回其中
   返 回 值：路线规划成功返回true，失败返回false
-  说    明：内部严格按照dijkstra、build_paths、calculate_path_statistics、
-  calculate_arrival_time的顺序调用原有算法，界面层不重新实现寻路算法
+  说    明：Dijkstra和原有统计保持不变；build_paths之后增加route_segment解释层供EasyX使用
 ***************************************************************************/
 bool calculate_route_for_ui(vertex vertices[], int vertex_number,
 	ui_state& state)
 {
-	state.route_ready = false;
-	state.path_vertex_number = 0;
-	state.total_time_cost = 0;
-	state.total_fare_cost = 0;
+	invalidate_route_result(state);
 
 	if (!is_valid_vertex_id(state.start_vertex, vertex_number)
 		|| !is_valid_vertex_id(state.end_vertex, vertex_number)) {
@@ -1926,6 +2486,17 @@ bool calculate_route_for_ui(vertex vertices[], int vertex_number,
 		return false;
 	}
 
+	if (!build_route_segments(
+		vertices, vertex_number,
+		state.path, state.path_vertex_number,
+		state.previous_edge, state.allow_bike,
+		state.segments, state.segment_number,
+		state.stop_number)) {
+
+		state.message = "路线阶段生成失败";
+		return false;
+	}
+
 	if (!calculate_arrival_time(
 		state.start_hour,
 		state.start_minute,
@@ -1938,23 +2509,25 @@ bool calculate_route_for_ui(vertex vertices[], int vertex_number,
 		return false;
 	}
 
+	state.guide_page = 0;
 	state.route_ready = true;
 	state.message = "路线规划完成";
 
 	return true;
 }
 
-
 /***************************************************************************
   函数名称：handle_left_click
-  功    能：处理一次鼠标左键点击，根据点击位置修改站点选择、时间、策略、骑行或规划状态
+  功    能：处理一次鼠标左键点击，根据点击位置修改站点选择、时间、策略、骑行、翻页或规划状态
   输入参数：int mouse_x：鼠标点击位置的x坐标
   int mouse_y：鼠标点击位置的y坐标
   vertex vertices[]：顶点数组
   int vertex_number：顶点数量
+  const jiading_map_node map_nodes[]：嘉定局部图节点数组
+  int map_node_number：嘉定局部图节点数量
   ui_state& state：当前EasyX界面状态
   返 回 值：无
-  说    明：左侧x<900区域用于选择站点；右侧区域按照固定矩形坐标判断不同控件
+  说    明：指南翻页只修改guide_page，不重新调用Dijkstra
 ***************************************************************************/
 void handle_left_click(int mouse_x, int mouse_y,
 	vertex vertices[], int vertex_number,
@@ -1989,8 +2562,7 @@ void handle_left_click(int mouse_x, int mouse_y,
 		if (state.start_vertex == -1) {
 			state.start_vertex = clicked_vertex;
 			state.end_vertex = -1;
-			state.route_ready = false;
-			state.path_vertex_number = 0;
+			invalidate_route_result(state);
 			state.message = "请选择终点";
 		}
 		else {
@@ -2000,8 +2572,7 @@ void handle_left_click(int mouse_x, int mouse_y,
 			}
 
 			state.end_vertex = clicked_vertex;
-			state.route_ready = false;
-			state.path_vertex_number = 0;
+			invalidate_route_result(state);
 			state.message = "起终点已选择，请开始规划";
 		}
 
@@ -2013,8 +2584,30 @@ void handle_left_click(int mouse_x, int mouse_y,
 
 		state.is_jiading_campus =
 			!state.is_jiading_campus;
+		state.hovered_vertex = -1;
 
 		return;
+	}
+
+	if (state.route_ready && state.segment_number > 0) {
+		const int segments_per_page = 2;
+		int total_pages =
+			(state.segment_number + segments_per_page - 1)
+			/ segments_per_page;
+
+		if (is_point_in_rectangle(mouse_x, mouse_y,
+			930, 670, 970, 695)) {
+			if (state.guide_page > 0)
+				state.guide_page--;
+			return;
+		}
+
+		if (is_point_in_rectangle(mouse_x, mouse_y,
+			1130, 670, 1170, 695)) {
+			if (state.guide_page + 1 < total_pages)
+				state.guide_page++;
+			return;
+		}
 	}
 
 	if (is_point_in_rectangle(mouse_x, mouse_y,
@@ -2031,7 +2624,8 @@ void handle_left_click(int mouse_x, int mouse_y,
 		state.start_hour = total_minutes / 60;
 		state.start_minute = total_minutes % 60;
 
-		state.route_ready = false;
+		invalidate_route_result(state);
+		state.message = "出发时间已修改，请重新规划";
 	}
 
 	else if (is_point_in_rectangle(mouse_x, mouse_y,
@@ -2045,14 +2639,15 @@ void handle_left_click(int mouse_x, int mouse_y,
 		state.start_hour = total_minutes / 60;
 		state.start_minute = total_minutes % 60;
 
-		state.route_ready = false;
+		invalidate_route_result(state);
+		state.message = "出发时间已修改，请重新规划";
 	}
 
 	else if (is_point_in_rectangle(mouse_x, mouse_y,
 		930, 260, 1045, 295)) {
 
 		state.k = 0;
-		state.route_ready = false;
+		invalidate_route_result(state);
 		state.message = "已选择时间最短策略";
 	}
 
@@ -2060,7 +2655,7 @@ void handle_left_click(int mouse_x, int mouse_y,
 		1055, 260, 1170, 295)) {
 
 		state.k = 8;
-		state.route_ready = false;
+		invalidate_route_result(state);
 		state.message = "已选择经济优先策略";
 	}
 
@@ -2068,7 +2663,7 @@ void handle_left_click(int mouse_x, int mouse_y,
 		1030, 325, 1050, 345)) {
 
 		state.allow_bike = !state.allow_bike;
-		state.route_ready = false;
+		invalidate_route_result(state);
 
 		if (state.allow_bike)
 			state.message = "已允许骑行接驳";
@@ -2090,6 +2685,38 @@ void handle_left_click(int mouse_x, int mouse_y,
 }
 
 /***************************************************************************
+  函数名称：handle_mouse_move
+  功    能：更新当前鼠标悬停的物理节点
+  输入参数：鼠标坐标、总图/嘉定局部图节点和ui_state
+  返 回 值：悬停节点发生变化返回true，否则返回false
+  说    明：只有变化时才触发整界面重绘，避免每移动一个像素都重复刷新
+***************************************************************************/
+bool handle_mouse_move(int mouse_x, int mouse_y,
+	const vertex vertices[], int vertex_number,
+	const jiading_map_node map_nodes[], int map_node_number,
+	ui_state& state)
+{
+	int hovered_vertex = -1;
+
+	if (mouse_x < 900) {
+		if (state.is_jiading_campus) {
+			hovered_vertex = find_clicked_jiading_vertex(
+				map_nodes, map_node_number, mouse_x, mouse_y);
+		}
+		else {
+			hovered_vertex = find_clicked_vertex(
+				vertices, vertex_number, mouse_x, mouse_y);
+		}
+	}
+
+	if (hovered_vertex == state.hovered_vertex)
+		return false;
+
+	state.hovered_vertex = hovered_vertex;
+	return true;
+}
+
+/***************************************************************************
   函数名称：run_easyx_interface
   功    能：运行EasyX主界面消息循环，持续接收鼠标和键盘消息并根据状态重新绘制界面
   输入参数：vertex vertices[]：顶点数组
@@ -2098,7 +2725,7 @@ void handle_left_click(int mouse_x, int mouse_y,
   int line_number：线路数量
   ui_state& state：当前EasyX界面状态
   返 回 值：无
-  说    明：鼠标左键触发handle_left_click后重新绘制；按ESC或关闭窗口结束循环
+  说    明：鼠标点击或悬停节点变化后重新绘制；按ESC或关闭窗口结束循环
 ***************************************************************************/
 void run_easyx_interface(
 	vertex vertices[],
@@ -2133,6 +2760,26 @@ void run_easyx_interface(
 			&& message.vkcode == VK_ESCAPE)
 			break;
 
+		if (message.message == WM_MOUSEMOVE) {
+			if (handle_mouse_move(
+				message.x, message.y,
+				vertices, vertex_number,
+				map_nodes, map_node_number,
+				state)) {
+
+				draw_easyx_interface(
+					vertices,
+					vertex_number,
+					lines,
+					line_number,
+					map_nodes,
+					map_node_number,
+					jiading_background,
+					state);
+			}
+			continue;
+		}
+
 		if (message.message == WM_LBUTTONDOWN) {
 
 			handle_left_click(
@@ -2158,26 +2805,6 @@ void run_easyx_interface(
 
 	EndBatchDraw();
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 /***************************************************************************
   函数名称：
