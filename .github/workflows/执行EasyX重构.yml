@@ -13,60 +13,18 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: 提取重构脚本
+      - name: 保存重构脚本
         shell: bash
         run: |
-          git fetch origin '文字清晰度修复临时分支'
-          git show 'origin/文字清晰度修复临时分支:.github/workflows/重构EasyX界面.yml' > /tmp/source_workflow.yml
-          python3 - <<'PY'
-          from pathlib import Path
-          import base64
-          import re
-          workflow = Path('/tmp/source_workflow.yml').read_text(encoding='utf-8')
-          line = next((item.strip() for item in workflow.splitlines() if item.strip().startswith("echo 'ZnJv")), None)
-          if line is None:
-              raise RuntimeError('找不到EasyX重构脚本数据')
-          payload = line.split("echo '", 1)[1].rsplit("' | base64", 1)[0]
-          match = re.match(r'[A-Za-z0-9+/=]+', payload)
-          if not match:
-              raise RuntimeError('重构脚本base64前缀不存在')
-          prefix = match.group(0)
-          padded_prefix = prefix + '=' * ((4 - len(prefix) % 4) % 4)
-          decoded_prefix = base64.b64decode(padded_prefix).decode('utf-8', errors='ignore')
-          raw_suffix = payload[len(prefix):]
-          script = decoded_prefix + raw_suffix
-
-          needle = 'text = path.read_bytes().decode("gb2312")\n'
-          if needle not in script:
-              raise RuntimeError('找不到源码读取语句')
-          script = script.replace(needle, needle + 'text = text.replace("\\r\\n", "\\n").replace("\\r", "\\n")\n', 1)
-
-          ui_start_pos = script.index('ui_start_marker =')
-          ui_end_line = 'ui_end = text.index(ui_end_marker)'
-          ui_end_pos = script.index(ui_end_line, ui_start_pos) + len(ui_end_line)
-          while ui_end_pos < len(script) and script[ui_end_pos] in '\r\n':
-              ui_end_pos += 1
-          ui_replacement = 'ui_function_position = text.index("bool enable_high_dpi_rendering()")\nui_start = text.rfind("/***************************************************************************", 0, ui_function_position)\nui_end_function_position = text.index("void invalidate_route_result")\nui_end = text.rfind("/***************************************************************************", 0, ui_end_function_position)\n'
-          script = script[:ui_start_pos] + ui_replacement + script[ui_end_pos:]
-
-          input_start_pos = script.index('input_start_marker =')
-          input_end_line = 'main_position = text.index("int main()", input_start)'
-          input_end_pos = script.index(input_end_line, input_start_pos) + len(input_end_line)
-          while input_end_pos < len(script) and script[input_end_pos] in '\r\n':
-              input_end_pos += 1
-          input_replacement = 'input_function_position = text.index("void handle_left_click(")\ninput_start = text.rfind("/***************************************************************************", 0, input_function_position)\nmain_position = text.index("int main()", input_start)\n'
-          script = script[:input_start_pos] + input_replacement + script[input_end_pos:]
-
-          Path('/tmp/refactor.py').write_text(script, encoding='utf-8')
-          compile(script, '/tmp/refactor.py', 'exec')
-          print('重构脚本恢复完成，字节数：', len(script.encode('utf-8')))
-          PY
+          cp .github/scripts/refactor_easyx.py /tmp/refactor_easyx.py
+          python3 -m py_compile /tmp/refactor_easyx.py
       - name: 重构并检查源码
         shell: bash
         run: |
           git fetch origin main
           git checkout -B main origin/main
-          python3 /tmp/refactor.py
+          python3 /tmp/refactor_easyx.py
+
           mkdir -p /tmp/stub
           cat > /tmp/stub/windows.h <<'EOF'
           #pragma once
@@ -108,6 +66,7 @@ jobs:
           inline LONG_PTR SetWindowLongPtr(HWND, int, LONG_PTR) { return 0; }
           inline BOOL SetWindowPos(HWND, HWND, int, int, int, int, unsigned int) { return TRUE; }
           EOF
+
           cat > /tmp/stub/graphics.h <<'EOF'
           #pragma once
           #include "windows.h"
@@ -152,6 +111,7 @@ jobs:
           inline void FlushBatchDraw() {}
           inline ExMessage getmessage(int) { return ExMessage{}; }
           EOF
+
           g++ -std=c++17 -fsyntax-only -finput-charset=GB2312 -fexec-charset=GB2312 -I/tmp/stub main.cpp
           python3 - <<'PY'
           from pathlib import Path
