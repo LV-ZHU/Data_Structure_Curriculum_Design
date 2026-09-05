@@ -19,12 +19,12 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import base64
-          import re
           workflow = Path('.github/workflows/文字清晰度修复.yml').read_text(encoding='utf-8')
-          match = re.search(r"echo '([A-Za-z0-9+/=]+)' \\| base64", workflow)
-          if not match:
+          line = next((item for item in workflow.splitlines() if "base64 -d > /tmp/patch.py" in item), None)
+          if line is None:
               raise RuntimeError('找不到布局脚本数据')
-          script = base64.b64decode(match.group(1)).decode('utf-8')
+          payload = line.split("echo '", 1)[1].split("' | base64", 1)[0]
+          script = base64.b64decode(payload).decode('utf-8')
           script = script.replace('\\\\r', '\\r').replace('\\\\n', '\\n')
           Path('/tmp/patch.py').write_text(script, encoding='utf-8')
           PY
