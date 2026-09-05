@@ -1388,6 +1388,73 @@ string get_transfer_summary(const vertex vertices[], const ui_state& state)
 }
 
 /***************************************************************************
+  函数名称：enable_high_dpi_rendering
+  功    能：在创建EasyX窗口前启用高DPI感知，避免Windows把整张画布作为低分辨率位图放大
+  输入参数：无
+  返 回 值：成功设置进程或线程DPI模式返回true，否则返回false
+  说    明：动态取得Windows 10的DPI接口，避免项目目标版本不同导致编译失败；优先使用Per-Monitor V2
+***************************************************************************/
+bool enable_high_dpi_rendering()
+{
+    HMODULE user32_module = GetModuleHandleA("user32.dll");
+    if (!user32_module)
+        return SetProcessDPIAware() != FALSE;
+
+    using set_process_dpi_context_function = BOOL(WINAPI*)(HANDLE);
+    using set_thread_dpi_context_function = HANDLE(WINAPI*)(HANDLE);
+
+    set_process_dpi_context_function set_process_context =
+        reinterpret_cast<set_process_dpi_context_function>(
+            GetProcAddress(user32_module, "SetProcessDpiAwarenessContext"));
+    set_thread_dpi_context_function set_thread_context =
+        reinterpret_cast<set_thread_dpi_context_function>(
+            GetProcAddress(user32_module, "SetThreadDpiAwarenessContext"));
+
+    HANDLE per_monitor_v2_context =
+        reinterpret_cast<HANDLE>(static_cast<INT_PTR>(-4));
+
+    bool process_enabled = false;
+    if (set_process_context)
+        process_enabled =
+            set_process_context(per_monitor_v2_context) != FALSE;
+
+    HANDLE previous_thread_context = nullptr;
+    if (set_thread_context)
+        previous_thread_context =
+            set_thread_context(per_monitor_v2_context);
+
+    if (process_enabled || previous_thread_context != nullptr)
+        return true;
+
+    return SetProcessDPIAware() != FALSE;
+}
+
+/***************************************************************************
+  函数名称：lock_easyx_window_size
+  功    能：锁定EasyX固定像素画布的窗口大小，禁止最大化和拖拽缩放造成二次插值
+  输入参数：无
+  返 回 值：无
+  说    明：程序的地图和控件坐标均以1200乘700固定画布设计，因此只允许移动、最小化和关闭窗口
+***************************************************************************/
+void lock_easyx_window_size()
+{
+    HWND easyx_window = GetHWnd();
+    if (!easyx_window)
+        return;
+
+    LONG_PTR window_style =
+        GetWindowLongPtr(easyx_window, GWL_STYLE);
+    window_style &=
+        ~static_cast<LONG_PTR>(WS_THICKFRAME | WS_MAXIMIZEBOX);
+    SetWindowLongPtr(easyx_window, GWL_STYLE, window_style);
+
+    SetWindowPos(easyx_window, nullptr,
+        0, 0, 0, 0,
+        SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER
+        | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+}
+
+/***************************************************************************
   函数名称：set_ui_font
   功    能：统一设置EasyX界面字体，并启用GDI抗锯齿
   输入参数：int font_height：字体高度；int font_weight：字体粗细
@@ -1397,15 +1464,38 @@ string get_transfer_summary(const vertex vertices[], const ui_state& state)
 void set_ui_font(int font_height, int font_weight = FW_NORMAL)
 {
     LOGFONT text_font = {};
-    text_font.lfHeight = font_height;
+    text_font.lfHeight = -font_height;
     text_font.lfWeight = font_weight;
     text_font.lfCharSet = GB2312_CHARSET;
     text_font.lfOutPrecision = OUT_TT_PRECIS;
     text_font.lfClipPrecision = CLIP_DEFAULT_PRECIS;
-    text_font.lfQuality = ANTIALIASED_QUALITY;
+    text_font.lfQuality = CLEARTYPE_NATURAL_QUALITY;
     text_font.lfPitchAndFamily = DEFAULT_PITCH | FF_DONTCARE;
     std::strncpy(text_font.lfFaceName,
         "Microsoft YaHei UI", LF_FACESIZE - 1);
+    text_font.lfFaceName[LF_FACESIZE - 1] = '\0';
+    settextstyle(&text_font);
+}
+
+/***************************************************************************
+  函数名称：set_map_font
+  功    能：设置总览地图站名专用字体
+  输入参数：int font_height：字体高度；int font_weight：字体粗细
+  返 回 值：无
+  说    明：小字号中文使用宋体和ClearType，笔画比连续多次描边的微软雅黑更清晰
+***************************************************************************/
+void set_map_font(int font_height, int font_weight = FW_NORMAL)
+{
+    LOGFONT text_font = {};
+    text_font.lfHeight = -font_height;
+    text_font.lfWeight = font_weight;
+    text_font.lfCharSet = GB2312_CHARSET;
+    text_font.lfOutPrecision = OUT_TT_PRECIS;
+    text_font.lfClipPrecision = CLIP_DEFAULT_PRECIS;
+    text_font.lfQuality = CLEARTYPE_QUALITY;
+    text_font.lfPitchAndFamily = DEFAULT_PITCH | FF_MODERN;
+    std::strncpy(text_font.lfFaceName,
+        "SimSun", LF_FACESIZE - 1);
     text_font.lfFaceName[LF_FACESIZE - 1] = '\0';
     settextstyle(&text_font);
 }
@@ -1775,7 +1865,7 @@ void draw_jiading_campus_map(
 			map_node_number, state);
 
 	//5. 标签
-	set_ui_font(16);
+	set_ui_font(17);
 	setbkmode(TRANSPARENT);
 
 	for (int i = 0; i < map_node_number; i++) {
@@ -1974,7 +2064,7 @@ void draw_global_transfer_marks(const vertex vertices[], const ui_state& state)
 void draw_station_name_box(const string& text, int center_x, int center_y)
 {
     setbkmode(TRANSPARENT);
-    set_ui_font(15, FW_BOLD);
+    set_ui_font(16, FW_BOLD);
 
     int text_width = textwidth(text.c_str());
     int text_height = textheight(text.c_str());
@@ -2030,15 +2120,33 @@ bool is_jiading_internal_vertex(int vertex_id)
 int get_label_overlap_area(const station_label_rectangle& first,
     const station_label_rectangle& second)
 {
-    int overlap_left = first.left > second.left ? first.left : second.left;
-    int overlap_top = first.top > second.top ? first.top : second.top;
-    int overlap_right = first.right < second.right ? first.right : second.right;
-    int overlap_bottom = first.bottom < second.bottom ? first.bottom : second.bottom;
+    const int safe_gap = 3;
 
-    if (overlap_left >= overlap_right || overlap_top >= overlap_bottom)
+    int first_left = first.left - safe_gap;
+    int first_top = first.top - safe_gap;
+    int first_right = first.right + safe_gap;
+    int first_bottom = first.bottom + safe_gap;
+
+    int second_left = second.left - safe_gap;
+    int second_top = second.top - safe_gap;
+    int second_right = second.right + safe_gap;
+    int second_bottom = second.bottom + safe_gap;
+
+    int overlap_left =
+        first_left > second_left ? first_left : second_left;
+    int overlap_top =
+        first_top > second_top ? first_top : second_top;
+    int overlap_right =
+        first_right < second_right ? first_right : second_right;
+    int overlap_bottom =
+        first_bottom < second_bottom ? first_bottom : second_bottom;
+
+    if (overlap_left >= overlap_right
+        || overlap_top >= overlap_bottom)
         return 0;
 
-    return (overlap_right - overlap_left) * (overlap_bottom - overlap_top);
+    return (overlap_right - overlap_left)
+        * (overlap_bottom - overlap_top);
 }
 
 /***************************************************************************
@@ -2153,15 +2261,23 @@ station_label_rectangle choose_station_label_rectangle(
     const station_label_rectangle placed_rectangles[], int placed_number,
     const vertex vertices[], int vertex_number, int current_vertex)
 {
-    const int distances[] = { 8, 16, 26, 38, 52, 66, 76 };
+    const int distances[] = {
+        10, 20, 32, 46, 62, 80, 98, 118, 140
+    };
+    const int distance_number =
+        sizeof(distances) / sizeof(distances[0]);
     station_label_rectangle best_candidate;
     int best_score = INT_MAX;
 
-    for (int distance_index = 0; distance_index < 7; distance_index++) {
+    for (int distance_index = 0;
+        distance_index < distance_number;
+        distance_index++) {
         for (int direction = 0; direction < 8; direction++) {
-            station_label_rectangle candidate = build_station_label_candidate(
-                center_x, center_y, text_width, text_height,
-                direction, distances[distance_index]);
+            station_label_rectangle candidate =
+                build_station_label_candidate(
+                    center_x, center_y,
+                    text_width, text_height,
+                    direction, distances[distance_index]);
 
             int score = score_station_label_candidate(
                 candidate, placed_rectangles, placed_number,
@@ -2191,15 +2307,17 @@ station_label_rectangle choose_station_label_rectangle(
 void draw_outlined_station_text(int x, int y, const string& text)
 {
     setbkmode(TRANSPARENT);
-    set_ui_font(13);
+    set_map_font(15);
 
-    settextcolor(RGB(255, 255, 255));
-    outtextxy(x - 1, y, text.c_str());
-    outtextxy(x + 1, y, text.c_str());
-    outtextxy(x, y - 1, text.c_str());
-    outtextxy(x, y + 1, text.c_str());
+    int text_width = textwidth(text.c_str());
+    int text_height = textheight(text.c_str());
 
-    settextcolor(RGB(35, 45, 60));
+    //只铺一层极薄的浅色底，不再把同一段文字偏移绘制五次，避免中文笔画发虚。
+    setfillcolor(RGB(247, 250, 252));
+    solidrectangle(x - 2, y - 1,
+        x + text_width + 2, y + text_height + 1);
+
+    settextcolor(RGB(25, 35, 48));
     outtextxy(x, y, text.c_str());
 }
 
@@ -2286,7 +2404,7 @@ void draw_all_station_names(const vertex vertices[], int vertex_number)
     station_label_rectangle placed_rectangles[physical_vertex_number];
     int placed_number = 0;
 
-    set_ui_font(13);
+    set_map_font(15);
 
     for (int i = 0; i < label_number; i++) {
         int vertex_id = label_vertices[i];
@@ -2534,7 +2652,7 @@ void draw_control_panel(const vertex vertices[], int vertex_number,
 	setlinecolor(RGB(150, 160, 170));
 	rectangle(930, 108, 1170, 130);
 
-	set_ui_font(14);
+	set_ui_font(16);
 	settextcolor(RGB(35, 45, 60));
 
 	if (state.is_jiading_campus)
@@ -2542,7 +2660,7 @@ void draw_control_panel(const vertex vertices[], int vertex_number,
 	else
 		outtextxy(996, 111, "嘉定校区局部图");
 
-	set_ui_font(18);
+	set_ui_font(20, FW_BOLD);
 
 	outtextxy(920, 20, "城市多模态交通导航");
 
@@ -2604,7 +2722,7 @@ void draw_control_panel(const vertex vertices[], int vertex_number,
 		solidrectangle(1034, 329, 1046, 341);
 	}
 
-	set_ui_font(14);
+	set_ui_font(15);
 	settextcolor(RGB(35, 45, 60));
 	outtextxy(920, 352, "显示全部站名");
 	setlinecolor(RGB(120, 140, 160));
@@ -2627,7 +2745,7 @@ void draw_control_panel(const vertex vertices[], int vertex_number,
 	settextcolor(RGB(35, 45, 60));
 	outtextxy(1090, 390, "重置");
 
-	set_ui_font(13);
+	set_ui_font(14);
 	settextcolor(RGB(35, 45, 60));
 	outtextxy(920, 430, "状态：");
 	outtextxy(960, 430, state.message.c_str());
@@ -2701,7 +2819,7 @@ void draw_route_result(const vertex vertices[],
 
     setbkmode(TRANSPARENT);
     settextcolor(RGB(35, 45, 60));
-    set_ui_font(14);
+    set_ui_font(16);
 
     stringstream result_stream;
     string result_text;
@@ -2733,15 +2851,15 @@ void draw_route_result(const vertex vertices[],
     if (transfer_count > 0)
         result_stream << "  " << get_transfer_summary(vertices, state);
 
-    set_ui_font(13);
+    set_ui_font(15);
     int transfer_bottom = draw_wrapped_text(
-        result_stream.str(), 920, 490, 265, 16, 2);
+        result_stream.str(), 920, 490, 265, 18, 2);
 
     int guide_title_y = transfer_bottom + 2;
     if (guide_title_y < 524)
         guide_title_y = 524;
 
-    set_ui_font(14, FW_BOLD);
+    set_ui_font(16, FW_BOLD);
     outtextxy(920, guide_title_y, "详细路线");
 
     const int segments_per_page = 4;
@@ -2782,19 +2900,19 @@ void draw_route_result(const vertex vertices[],
                 result_stream << "  经" << intermediate_stop_number << "站";
         }
 
-        set_ui_font(14);
+        set_ui_font(15);
         result_text = truncate_gb2312_text_to_width(
             result_stream.str(), 265);
         outtextxy(920, y, result_text.c_str());
 
-        set_ui_font(13);
+        set_ui_font(15);
         string endpoint_text = build_route_endpoint_text(
             get_entity_station_name(vertices, segment.start_vertex),
             get_entity_station_name(vertices, segment.end_vertex),
             255);
-        outtextxy(928, y + 15, endpoint_text.c_str());
+        outtextxy(928, y + 16, endpoint_text.c_str());
 
-        y += 30;
+        y += 31;
     }
 
     set_ui_font(14);
@@ -3319,6 +3437,8 @@ void run_easyx_interface(
 ***************************************************************************/
 int main()
 {
+	enable_high_dpi_rendering();
+
 	string lines_path = "data/lines.csv";//线路CSV路径
 	string stations_path = "data/stations.csv";//站点CSV路径
 	string edges_path = "data/edges.csv";//边CSV路径
@@ -3347,8 +3467,8 @@ int main()
 		output_one_step_vertex(vertices[i]);
 #endif
 
-	SetProcessDPIAware();
 	initgraph(1200, 700, EX_SHOWCONSOLE);
+	lock_easyx_window_size();
 	IMAGE jiading_background;
 
 	loadimage(
