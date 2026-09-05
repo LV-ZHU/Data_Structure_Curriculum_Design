@@ -31,12 +31,14 @@ jobs:
           if not match:
               raise RuntimeError('重构脚本base64前缀不存在')
           prefix = match.group(0)
-          decoded_prefix = base64.b64decode(prefix).decode('utf-8')
+          padded_prefix = prefix + '=' * ((4 - len(prefix) % 4) % 4)
+          decoded_prefix = base64.b64decode(padded_prefix).decode('utf-8', errors='ignore')
           raw_suffix = payload[len(prefix):]
           script = decoded_prefix + raw_suffix
           Path('/tmp/refactor.py').write_text(script, encoding='utf-8')
           compile(script, '/tmp/refactor.py', 'exec')
           print('重构脚本恢复完成，字节数：', len(script.encode('utf-8')))
+          print('拼接位置：', repr(decoded_prefix[-40:]), ' + ', repr(raw_suffix[:40]))
           PY
       - name: 重构并检查源码
         shell: bash
