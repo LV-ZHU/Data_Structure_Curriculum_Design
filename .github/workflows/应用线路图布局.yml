@@ -1,0 +1,39 @@
+name: 应用线路图布局
+on:
+  push:
+    branches:
+      - 文字清晰度修复临时分支
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出临时分支
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: 提取并应用布局脚本
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64
+          import re
+          workflow = Path('.github/workflows/文字清晰度修复.yml').read_text(encoding='utf-8')
+          match = re.search(r"echo '([A-Za-z0-9+/=]+)' \\| base64", workflow)
+          if not match:
+              raise RuntimeError('找不到布局脚本数据')
+          script = base64.b64decode(match.group(1)).decode('utf-8')
+          script = script.replace('\\\\r', '\\r').replace('\\\\n', '\\n')
+          Path('/tmp/patch.py').write_text(script, encoding='utf-8')
+          PY
+          git fetch origin main
+          git checkout -B main origin/main
+          python3 /tmp/patch.py
+          git config user.name "LV-ZHU"
+          git config user.email "212522225+LV-ZHU@users.noreply.github.com"
+          git add main.cpp data/stations.csv
+          git diff --cached --stat
+          git commit -m "优化线路图布局"
+          git push origin HEAD:main
