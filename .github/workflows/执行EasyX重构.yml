@@ -21,14 +21,22 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import base64
+          import re
           workflow = Path('/tmp/source_workflow.yml').read_text(encoding='utf-8')
           line = next((item.strip() for item in workflow.splitlines() if item.strip().startswith("echo 'ZnJv")), None)
           if line is None:
               raise RuntimeError('找不到EasyX重构脚本数据')
           payload = line.split("echo '", 1)[1].rsplit("' | base64", 1)[0]
-          script = base64.b64decode(payload).decode('utf-8')
+          match = re.match(r'[A-Za-z0-9+/=]+', payload)
+          if not match:
+              raise RuntimeError('重构脚本base64前缀不存在')
+          prefix = match.group(0)
+          decoded_prefix = base64.b64decode(prefix).decode('utf-8')
+          raw_suffix = payload[len(prefix):]
+          script = decoded_prefix + raw_suffix
           Path('/tmp/refactor.py').write_text(script, encoding='utf-8')
-          print('重构脚本提取完成，字节数：', len(script.encode('utf-8')))
+          compile(script, '/tmp/refactor.py', 'exec')
+          print('重构脚本恢复完成，字节数：', len(script.encode('utf-8')))
           PY
       - name: 重构并检查源码
         shell: bash
