@@ -6,6 +6,11 @@
 #include <limits>
 #include <iomanip>
 #include <stdexcept>
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <cstring>
 #include <graphics.h>
 using namespace std;
 
@@ -85,7 +90,7 @@ struct ui_state {
 	int end_vertex = -1;
 	int k = 0;
 	bool allow_bike = false;
-	bool show_all_names = false;
+	bool show_all_names = true;
 
 	int start_hour = 8;
 	int start_minute = 30;
@@ -1383,6 +1388,29 @@ string get_transfer_summary(const vertex vertices[], const ui_state& state)
 }
 
 /***************************************************************************
+  函数名称：set_ui_font
+  功    能：统一设置EasyX界面字体，并启用GDI抗锯齿
+  输入参数：int font_height：字体高度；int font_weight：字体粗细
+  返 回 值：无
+  说    明：字体名称使用ASCII，避免源码字符集影响；字符集固定为GB2312
+***************************************************************************/
+void set_ui_font(int font_height, int font_weight = FW_NORMAL)
+{
+    LOGFONT text_font = {};
+    text_font.lfHeight = font_height;
+    text_font.lfWeight = font_weight;
+    text_font.lfCharSet = GB2312_CHARSET;
+    text_font.lfOutPrecision = OUT_TT_PRECIS;
+    text_font.lfClipPrecision = CLIP_DEFAULT_PRECIS;
+    text_font.lfQuality = ANTIALIASED_QUALITY;
+    text_font.lfPitchAndFamily = DEFAULT_PITCH | FF_DONTCARE;
+    std::strncpy(text_font.lfFaceName,
+        "Microsoft YaHei UI", LF_FACESIZE - 1);
+    text_font.lfFaceName[LF_FACESIZE - 1] = '\0';
+    settextstyle(&text_font);
+}
+
+/***************************************************************************
   函数名称：draw_all_edges
   功    能：在EasyX窗口中绘制当前邻接表里的全部无向边
   输入参数：const vertex vertices[]：顶点数组
@@ -1637,7 +1665,7 @@ int find_clicked_jiading_vertex(
 void draw_transfer_star(int x, int y)
 {
 	setbkmode(TRANSPARENT);
-	settextstyle(24, 0, "微软雅黑");
+	set_ui_font(24);
 	settextcolor(RGB(220, 40, 40));
 	outtextxy(x - 6, y - 18, "*");
 }
@@ -1747,7 +1775,7 @@ void draw_jiading_campus_map(
 			map_node_number, state);
 
 	//5. 标签
-	settextstyle(16, 0, "微软雅黑");
+	set_ui_font(16);
 	setbkmode(TRANSPARENT);
 
 	for (int i = 0; i < map_node_number; i++) {
@@ -1938,75 +1966,394 @@ void draw_global_transfer_marks(const vertex vertices[], const ui_state& state)
 
 /***************************************************************************
   函数名称：draw_station_name_box
-  功    能：在地图节点附近绘制带白底的站名
-  输入参数：const string& text：需要显示的站名
-  int center_x：对应节点圆心x坐标
-  int center_y：对应节点圆心y坐标
+  功    能：在地图节点附近绘制清晰的白底完整站名
+  输入参数：const string& text：站名；int center_x, center_y：节点圆心坐标
   返 回 值：无
-  说    明：标签自动限制在左侧900乘700地图区域内
+  说    明：用于起终点、换乘点和鼠标悬停；字体比普通全局站名更醒目
 ***************************************************************************/
 void draw_station_name_box(const string& text, int center_x, int center_y)
 {
-	setbkmode(TRANSPARENT);
-	settextstyle(13, 0, "微软雅黑");
+    setbkmode(TRANSPARENT);
+    set_ui_font(15, FW_BOLD);
 
-	int text_width = textwidth(text.c_str());
-	int text_height = textheight(text.c_str());
-	int left = center_x + 8;
-	int top = center_y - text_height - 8;
+    int text_width = textwidth(text.c_str());
+    int text_height = textheight(text.c_str());
+    int left = center_x + 9;
+    int top = center_y - text_height - 9;
 
-	if (left + text_width + 8 > 895)
-		left = center_x - text_width - 12;
-	if (left < 2)
-		left = 2;
-	if (top < 2)
-		top = center_y + 8;
-	if (top + text_height + 6 > 698)
-		top = 698 - text_height - 6;
+    if (left + text_width + 10 > 895)
+        left = center_x - text_width - 14;
+    if (left < 2)
+        left = 2;
+    if (top < 2)
+        top = center_y + 9;
+    if (top + text_height + 8 > 698)
+        top = 698 - text_height - 8;
 
-	int right = left + text_width + 8;
-	int bottom = top + text_height + 6;
+    int right = left + text_width + 10;
+    int bottom = top + text_height + 8;
 
-	setfillcolor(RGB(255, 255, 255));
-	solidrectangle(left, top, right, bottom);
-	setlinecolor(RGB(150, 160, 170));
-	rectangle(left, top, right, bottom);
-	settextcolor(RGB(35, 45, 60));
-	outtextxy(left + 4, top + 3, text.c_str());
+    setfillcolor(RGB(255, 255, 255));
+    solidrectangle(left, top, right, bottom);
+    setlinecolor(RGB(125, 140, 155));
+    rectangle(left, top, right, bottom);
+    settextcolor(RGB(28, 38, 52));
+    outtextxy(left + 5, top + 4, text.c_str());
+}
+
+struct station_label_rectangle {
+    int left = 0;
+    int top = 0;
+    int right = 0;
+    int bottom = 0;
+};
+
+/***************************************************************************
+  函数名称：is_jiading_internal_vertex
+  功    能：判断物理节点是否属于嘉定校区内部、应在局部图展开显示
+  输入参数：int vertex_id：物理节点编号
+  返 回 值：属于嘉定校区内部返回true，否则返回false
+  说    明：总图把56到63号校内节点收束为一个“嘉定校区”标签
+***************************************************************************/
+bool is_jiading_internal_vertex(int vertex_id)
+{
+    return vertex_id >= 56 && vertex_id <= 63;
+}
+
+/***************************************************************************
+  函数名称：get_label_overlap_area
+  功    能：计算两个站名矩形的重叠面积
+  输入参数：两个station_label_rectangle
+  返 回 值：重叠像素面积，无重叠返回0
+  说    明：用于全局站名自动避让评分
+***************************************************************************/
+int get_label_overlap_area(const station_label_rectangle& first,
+    const station_label_rectangle& second)
+{
+    int overlap_left = first.left > second.left ? first.left : second.left;
+    int overlap_top = first.top > second.top ? first.top : second.top;
+    int overlap_right = first.right < second.right ? first.right : second.right;
+    int overlap_bottom = first.bottom < second.bottom ? first.bottom : second.bottom;
+
+    if (overlap_left >= overlap_right || overlap_top >= overlap_bottom)
+        return 0;
+
+    return (overlap_right - overlap_left) * (overlap_bottom - overlap_top);
+}
+
+/***************************************************************************
+  函数名称：build_station_label_candidate
+  功    能：根据节点、方向和距离生成一个站名候选矩形
+  输入参数：节点坐标、文字宽高、方向编号、离站距离
+  返 回 值：候选矩形
+  说    明：方向0到7分别覆盖上、下、左、右及四个对角方向
+***************************************************************************/
+station_label_rectangle build_station_label_candidate(
+    int center_x, int center_y, int text_width, int text_height,
+    int direction, int distance)
+{
+    station_label_rectangle candidate;
+    int left = center_x;
+    int top = center_y;
+
+    switch (direction) {
+        case 0:
+            left = center_x - text_width / 2;
+            top = center_y - distance - text_height;
+            break;
+        case 1:
+            left = center_x - text_width / 2;
+            top = center_y + distance;
+            break;
+        case 2:
+            left = center_x - distance - text_width;
+            top = center_y - text_height / 2;
+            break;
+        case 3:
+            left = center_x + distance;
+            top = center_y - text_height / 2;
+            break;
+        case 4:
+            left = center_x + distance;
+            top = center_y - distance - text_height;
+            break;
+        case 5:
+            left = center_x - distance - text_width;
+            top = center_y - distance - text_height;
+            break;
+        case 6:
+            left = center_x + distance;
+            top = center_y + distance;
+            break;
+        default:
+            left = center_x - distance - text_width;
+            top = center_y + distance;
+            break;
+    }
+
+    candidate.left = left;
+    candidate.top = top;
+    candidate.right = left + text_width;
+    candidate.bottom = top + text_height;
+    return candidate;
+}
+
+/***************************************************************************
+  函数名称：score_station_label_candidate
+  功    能：计算一个站名候选位置的拥挤程度
+  输入参数：候选矩形、已放置标签、全部物理节点和当前节点编号
+  返 回 值：分数越低越适合放置
+  说    明：越界禁止；标签重叠和遮挡站点重罚；远离节点仅轻微处罚
+***************************************************************************/
+int score_station_label_candidate(
+    const station_label_rectangle& candidate,
+    const station_label_rectangle placed_rectangles[], int placed_number,
+    const vertex vertices[], int vertex_number, int current_vertex,
+    int distance)
+{
+    if (candidate.left < 3 || candidate.top < 3
+        || candidate.right > 895 || candidate.bottom > 697)
+        return INT_MAX / 4;
+
+    int score = distance * 2;
+
+    for (int i = 0; i < placed_number; i++) {
+        int overlap_area = get_label_overlap_area(candidate, placed_rectangles[i]);
+        if (overlap_area > 0)
+            score += 12000 + overlap_area * 20;
+    }
+
+    int physical_limit = vertex_number;
+    if (physical_limit > physical_vertex_number)
+        physical_limit = physical_vertex_number;
+
+    for (int i = 0; i < physical_limit; i++) {
+        if (i == current_vertex || is_jiading_internal_vertex(i))
+            continue;
+
+        if (vertices[i].x >= candidate.left - 3
+            && vertices[i].x <= candidate.right + 3
+            && vertices[i].y >= candidate.top - 3
+            && vertices[i].y <= candidate.bottom + 3)
+            score += 4500;
+    }
+
+    return score;
+}
+
+/***************************************************************************
+  函数名称：choose_station_label_rectangle
+  功    能：在多方向、多距离候选中选择最不拥挤的站名位置
+  输入参数：节点坐标、文字宽高、已放置标签和全部物理节点
+  返 回 值：评分最低的候选矩形
+  说    明：最远可把标签移到节点约76像素外，密集区域会自动向空白处展开
+***************************************************************************/
+station_label_rectangle choose_station_label_rectangle(
+    int center_x, int center_y, int text_width, int text_height,
+    const station_label_rectangle placed_rectangles[], int placed_number,
+    const vertex vertices[], int vertex_number, int current_vertex)
+{
+    const int distances[] = { 8, 16, 26, 38, 52, 66, 76 };
+    station_label_rectangle best_candidate;
+    int best_score = INT_MAX;
+
+    for (int distance_index = 0; distance_index < 7; distance_index++) {
+        for (int direction = 0; direction < 8; direction++) {
+            station_label_rectangle candidate = build_station_label_candidate(
+                center_x, center_y, text_width, text_height,
+                direction, distances[distance_index]);
+
+            int score = score_station_label_candidate(
+                candidate, placed_rectangles, placed_number,
+                vertices, vertex_number, current_vertex,
+                distances[distance_index]);
+
+            if (score < best_score) {
+                best_score = score;
+                best_candidate = candidate;
+            }
+
+            if (score < 100)
+                return candidate;
+        }
+    }
+
+    return best_candidate;
+}
+
+/***************************************************************************
+  函数名称：draw_outlined_station_text
+  功    能：绘制带白色细描边的普通站名
+  输入参数：左上角坐标和站名文字
+  返 回 值：无
+  说    明：透明背景不遮挡线路，白色描边保证文字跨过彩色线路时仍清晰
+***************************************************************************/
+void draw_outlined_station_text(int x, int y, const string& text)
+{
+    setbkmode(TRANSPARENT);
+    set_ui_font(13);
+
+    settextcolor(RGB(255, 255, 255));
+    outtextxy(x - 1, y, text.c_str());
+    outtextxy(x + 1, y, text.c_str());
+    outtextxy(x, y - 1, text.c_str());
+    outtextxy(x, y + 1, text.c_str());
+
+    settextcolor(RGB(35, 45, 60));
+    outtextxy(x, y, text.c_str());
+}
+
+/***************************************************************************
+  函数名称：get_station_label_density
+  功    能：统计一个站点周围的物理节点数量
+  输入参数：顶点数组、顶点数量、当前节点编号
+  返 回 值：半径约80像素内的邻居数量
+  说    明：密集站优先放标签，减少后续被挤入无解位置的概率
+***************************************************************************/
+int get_station_label_density(const vertex vertices[], int vertex_number,
+    int vertex_id)
+{
+    int density = 0;
+    int physical_limit = vertex_number;
+    if (physical_limit > physical_vertex_number)
+        physical_limit = physical_vertex_number;
+
+    for (int i = 0; i < physical_limit; i++) {
+        if (i == vertex_id || is_jiading_internal_vertex(i))
+            continue;
+        int dx = vertices[i].x - vertices[vertex_id].x;
+        int dy = vertices[i].y - vertices[vertex_id].y;
+        if (dx * dx + dy * dy <= 80 * 80)
+            density++;
+    }
+    return density;
 }
 
 /***************************************************************************
   函数名称：draw_all_station_names
-  功    能：在全市总览图中显示全部物理站点名称
-  输入参数：const vertex vertices[]：顶点数组
-  int vertex_number：顶点数量
+  功    能：在全市总览图中清晰显示全部非嘉定校内实体站名
+  输入参数：const vertex vertices[]：顶点数组；int vertex_number：顶点数量
   返 回 值：无
-  说    明：该功能默认关闭，只在用户打开“显示全部站名”后用于课程验收和查图
+  说    明：同实体换乘站只标一次；嘉定56到63号节点在总图收束为“嘉定校区”，
+  其具体名称全部在嘉定局部图中常显；其余站名通过多方向碰撞避让全部绘制
 ***************************************************************************/
 void draw_all_station_names(const vertex vertices[], int vertex_number)
 {
-	int draw_vertex_number = vertex_number;
-	if (draw_vertex_number > physical_vertex_number)
-		draw_vertex_number = physical_vertex_number;
+    int physical_limit = vertex_number;
+    if (physical_limit > physical_vertex_number)
+        physical_limit = physical_vertex_number;
 
-	setbkmode(TRANSPARENT);
-	settextstyle(10, 0, "微软雅黑");
-	settextcolor(RGB(45, 55, 68));
+    int label_vertices[physical_vertex_number];
+    int label_number = 0;
+    string used_entity_names[physical_vertex_number];
+    int used_name_number = 0;
 
-	for (int i = 0; i < draw_vertex_number; i++) {
-		string text = get_entity_station_name(vertices, i);
-		int text_y = vertices[i].y + ((i % 2 == 0) ? 7 : -15);
-		int text_x = vertices[i].x + 5;
+    for (int i = 0; i < physical_limit; i++) {
+        if (is_jiading_internal_vertex(i))
+            continue;
 
-		if (text_x + textwidth(text.c_str()) > 895)
-			text_x = vertices[i].x - textwidth(text.c_str()) - 5;
-		if (text_y < 2)
-			text_y = 2;
-		if (text_y > 685)
-			text_y = 685;
+        string entity_name = get_entity_station_name(vertices, i);
+        bool already_used = false;
+        for (int j = 0; j < used_name_number; j++) {
+            if (used_entity_names[j] == entity_name) {
+                already_used = true;
+                break;
+            }
+        }
+        if (already_used)
+            continue;
 
-		outtextxy(text_x, text_y, text.c_str());
-	}
+        used_entity_names[used_name_number++] = entity_name;
+        label_vertices[label_number++] = i;
+    }
+
+    //密集区域优先放置标签。
+    for (int i = 1; i < label_number; i++) {
+        int current_vertex = label_vertices[i];
+        int current_density = get_station_label_density(
+            vertices, vertex_number, current_vertex);
+        int j = i - 1;
+
+        while (j >= 0
+            && get_station_label_density(vertices, vertex_number,
+                label_vertices[j]) < current_density) {
+            label_vertices[j + 1] = label_vertices[j];
+            j--;
+        }
+        label_vertices[j + 1] = current_vertex;
+    }
+
+    station_label_rectangle placed_rectangles[physical_vertex_number];
+    int placed_number = 0;
+
+    set_ui_font(13);
+
+    for (int i = 0; i < label_number; i++) {
+        int vertex_id = label_vertices[i];
+        string text = get_entity_station_name(vertices, vertex_id);
+        int text_width = textwidth(text.c_str());
+        int text_height = textheight(text.c_str());
+
+        station_label_rectangle chosen = choose_station_label_rectangle(
+            vertices[vertex_id].x, vertices[vertex_id].y,
+            text_width, text_height,
+            placed_rectangles, placed_number,
+            vertices, vertex_number, vertex_id);
+
+        int target_x = vertices[vertex_id].x;
+        int target_y = vertices[vertex_id].y;
+        if (target_x < chosen.left)
+            target_x = chosen.left;
+        else if (target_x > chosen.right)
+            target_x = chosen.right;
+        if (target_y < chosen.top)
+            target_y = chosen.top;
+        else if (target_y > chosen.bottom)
+            target_y = chosen.bottom;
+
+        int dx = target_x - vertices[vertex_id].x;
+        int dy = target_y - vertices[vertex_id].y;
+        if (dx * dx + dy * dy > 18 * 18) {
+            setlinecolor(RGB(155, 165, 175));
+            setlinestyle(PS_SOLID, 1);
+            line(vertices[vertex_id].x, vertices[vertex_id].y,
+                target_x, target_y);
+        }
+
+        draw_outlined_station_text(chosen.left, chosen.top, text);
+        placed_rectangles[placed_number++] = chosen;
+    }
+
+    //嘉定校内节点在总图中只显示一个入口标签，详细名称在局部图全部展示。
+    int campus_x = 0;
+    int campus_y = 0;
+    int campus_number = 0;
+    for (int i = 56; i <= 63 && i < physical_limit; i++) {
+        campus_x += vertices[i].x;
+        campus_y += vertices[i].y;
+        campus_number++;
+    }
+
+    if (campus_number > 0) {
+        campus_x /= campus_number;
+        campus_y /= campus_number;
+        string campus_text = "嘉定校区";
+        int text_width = textwidth(campus_text.c_str());
+        int text_height = textheight(campus_text.c_str());
+
+        station_label_rectangle chosen = choose_station_label_rectangle(
+            campus_x, campus_y, text_width, text_height,
+            placed_rectangles, placed_number,
+            vertices, vertex_number, -1);
+
+        setlinecolor(RGB(130, 145, 160));
+        setlinestyle(PS_SOLID, 1);
+        line(campus_x, campus_y,
+            (chosen.left + chosen.right) / 2,
+            (chosen.top + chosen.bottom) / 2);
+        draw_outlined_station_text(
+            chosen.left, chosen.top, campus_text);
+    }
 }
 
 /***************************************************************************
@@ -2187,7 +2534,7 @@ void draw_control_panel(const vertex vertices[], int vertex_number,
 	setlinecolor(RGB(150, 160, 170));
 	rectangle(930, 108, 1170, 130);
 
-	settextstyle(14, 0, "微软雅黑");
+	set_ui_font(14);
 	settextcolor(RGB(35, 45, 60));
 
 	if (state.is_jiading_campus)
@@ -2195,7 +2542,7 @@ void draw_control_panel(const vertex vertices[], int vertex_number,
 	else
 		outtextxy(996, 111, "嘉定校区局部图");
 
-	settextstyle(18, 0, "微软雅黑");
+	set_ui_font(18);
 
 	outtextxy(920, 20, "城市多模态交通导航");
 
@@ -2257,7 +2604,7 @@ void draw_control_panel(const vertex vertices[], int vertex_number,
 		solidrectangle(1034, 329, 1046, 341);
 	}
 
-	settextstyle(14, 0, "微软雅黑");
+	set_ui_font(14);
 	settextcolor(RGB(35, 45, 60));
 	outtextxy(920, 352, "显示全部站名");
 	setlinecolor(RGB(120, 140, 160));
@@ -2280,247 +2627,255 @@ void draw_control_panel(const vertex vertices[], int vertex_number,
 	settextcolor(RGB(35, 45, 60));
 	outtextxy(1090, 390, "重置");
 
-	settextstyle(12, 0, "微软雅黑");
+	set_ui_font(13);
 	settextcolor(RGB(35, 45, 60));
 	outtextxy(920, 430, "状态：");
 	outtextxy(960, 430, state.message.c_str());
 }
 
 /***************************************************************************
+  函数名称：truncate_gb2312_text_to_width
+  功    能：把GB2312文本压缩到指定像素宽度并保留省略号
+  输入参数：const string& text：原文本；int max_width：最大像素宽度
+  返 回 值：不超过指定宽度的文本
+  说    明：按GB2312双字节边界截断，不会切开一个汉字
+***************************************************************************/
+string truncate_gb2312_text_to_width(const string& text, int max_width)
+{
+    if (textwidth(text.c_str()) <= max_width)
+        return text;
+
+    string result;
+    size_t position = 0;
+    while (position < text.size()) {
+        unsigned char first_byte =
+            static_cast<unsigned char>(text[position]);
+        size_t char_length = 1;
+        if (first_byte >= 0xA1 && position + 1 < text.size())
+            char_length = 2;
+
+        string candidate = result + text.substr(position, char_length) + "...";
+        if (textwidth(candidate.c_str()) > max_width)
+            break;
+
+        result += text.substr(position, char_length);
+        position += char_length;
+    }
+
+    return result + "...";
+}
+
+/***************************************************************************
+  函数名称：build_route_endpoint_text
+  功    能：生成一行同时保留起点和终点的紧凑路线端点文本
+  输入参数：起终点名称和整行最大像素宽度
+  返 回 值：形如“起点 -> 终点”的紧凑文本
+  说    明：两端分别分配宽度，长站名不会把另一端完全挤掉
+***************************************************************************/
+string build_route_endpoint_text(const string& start_name,
+    const string& end_name, int max_width)
+{
+    string arrow = " -> ";
+    int arrow_width = textwidth(arrow.c_str());
+    int one_side_width = (max_width - arrow_width) / 2;
+    string start_text = truncate_gb2312_text_to_width(
+        start_name, one_side_width);
+    string end_text = truncate_gb2312_text_to_width(
+        end_name, one_side_width);
+    return start_text + arrow + end_text;
+}
+
+/***************************************************************************
   函数名称：draw_route_result
-  功    能：在右侧面板绘制路线统计、换乘信息和分页后的详细路线阶段
-  输入参数：const vertex vertices[]：顶点数组
-  const transit_line lines[]：线路数组
-  int line_number：线路数量
-  const ui_state& state：当前EasyX界面状态
+  功    能：在右侧面板绘制压缩统计信息和分页后的详细路线阶段
+  输入参数：顶点数组、线路数组、线路数量和当前ui_state
   返 回 值：无
-  说    明：每页显示两个route_segment；翻页只修改guide_page，不重新运行Dijkstra
+  说    明：顶部三组关键信息满足课设要求；每页显示四个路线阶段，翻页不重算Dijkstra
 ***************************************************************************/
 void draw_route_result(const vertex vertices[],
-	const transit_line lines[], int line_number,
-	const ui_state& state)
+    const transit_line lines[], int line_number,
+    const ui_state& state)
 {
-	if (!state.route_ready)
-		return;
+    if (!state.route_ready)
+        return;
 
-	setbkmode(TRANSPARENT);
-	settextcolor(RGB(35, 45, 60));
-	settextstyle(13, 0, "微软雅黑");
+    setbkmode(TRANSPARENT);
+    settextcolor(RGB(35, 45, 60));
+    set_ui_font(14);
 
-	stringstream result_stream;
-	string result_text;
+    stringstream result_stream;
+    string result_text;
 
-	result_stream << "总时间：" << state.total_time_cost << "分钟";
-	result_text = result_stream.str();
-	outtextxy(920, 450, result_text.c_str());
+    //第一行：总时间 + 总费用。
+    result_stream << "时间:" << state.total_time_cost << "分  "
+        << fixed << setprecision(2)
+        << "费用:" << state.total_fare_cost << "元";
+    result_text = result_stream.str();
+    outtextxy(920, 450, result_text.c_str());
 
-	result_stream.str("");
-	result_stream.clear();
-	result_stream << fixed << setprecision(2)
-		<< "总费用：" << state.total_fare_cost << "元";
-	result_text = result_stream.str();
-	outtextxy(920, 468, result_text.c_str());
+    //第二行：预计到达 + 全程经停站数。
+    result_stream.str("");
+    result_stream.clear();
+    result_stream << "到达:"
+        << setw(2) << setfill('0') << state.arrival_hour
+        << ":" << setw(2) << state.arrival_minute;
+    if (state.days_passed > 0)
+        result_stream << "+" << state.days_passed << "天";
+    result_stream << "  经停:" << state.stop_number << "站";
+    result_text = result_stream.str();
+    outtextxy(920, 470, result_text.c_str());
 
-	result_stream.str("");
-	result_stream.clear();
-	result_stream << "预计到达："
-		<< setw(2) << setfill('0') << state.arrival_hour
-		<< ":" << setw(2) << state.arrival_minute;
-	if (state.days_passed > 0)
-		result_stream << " +" << state.days_passed << "天";
-	result_text = result_stream.str();
-	outtextxy(920, 486, result_text.c_str());
+    //第三组：换乘次数与换乘位置，必要时允许两行。
+    int transfer_count = get_transfer_count(state);
+    result_stream.str("");
+    result_stream.clear();
+    result_stream << "换乘:" << transfer_count << "次";
+    if (transfer_count > 0)
+        result_stream << "  " << get_transfer_summary(vertices, state);
 
-	result_stream.str("");
-	result_stream.clear();
-	result_stream << "经停站数：" << state.stop_number << "站";
-	result_text = result_stream.str();
-	outtextxy(920, 504, result_text.c_str());
+    set_ui_font(13);
+    int transfer_bottom = draw_wrapped_text(
+        result_stream.str(), 920, 490, 265, 16, 2);
 
-	int transfer_count = get_transfer_count(state);
-	result_stream.str("");
-	result_stream.clear();
-	result_stream << "换乘：" << transfer_count << "次";
-	result_text = result_stream.str();
-	outtextxy(920, 522, result_text.c_str());
+    int guide_title_y = transfer_bottom + 2;
+    if (guide_title_y < 524)
+        guide_title_y = 524;
 
-	int guide_title_y = 544;
+    set_ui_font(14, FW_BOLD);
+    outtextxy(920, guide_title_y, "详细路线");
 
-	if (transfer_count > 0) {
-		string transfer_summary =
-			"换乘点：" + get_transfer_summary(vertices, state);
+    const int segments_per_page = 4;
+    int total_pages =
+        (state.segment_number + segments_per_page - 1)
+        / segments_per_page;
+    if (total_pages < 1)
+        total_pages = 1;
 
-		settextstyle(11, 0, "微软雅黑");
-		int summary_bottom = draw_wrapped_text(
-			transfer_summary, 920, 540, 265, 13, 2);
-		guide_title_y = summary_bottom + 1;
-	}
+    int first_segment = state.guide_page * segments_per_page;
+    int last_segment = first_segment + segments_per_page;
+    if (last_segment > state.segment_number)
+        last_segment = state.segment_number;
 
-	settextstyle(13, 0, "微软雅黑");
-	outtextxy(920, guide_title_y, "详细路线：");
+    int y = guide_title_y + 18;
+    for (int i = first_segment; i < last_segment; i++) {
+        const route_segment& segment = state.segments[i];
 
-	const int segments_per_page = 2;
-	int total_pages =
-		(state.segment_number + segments_per_page - 1)
-		/ segments_per_page;
+        result_stream.str("");
+        result_stream.clear();
+        result_stream << (i + 1) << ". ";
 
-	if (total_pages < 1)
-		total_pages = 1;
+        if (segment.type == edge_type::TRANSFER) {
+            result_stream << (segment.use_bike ? "骑行" : "步行");
+        }
+        else if (segment.line_id >= 0 && segment.line_id < line_number) {
+            result_stream << "乘" << lines[segment.line_id].name;
+        }
+        else {
+            result_stream << "公共交通";
+        }
 
-	int first_segment = state.guide_page * segments_per_page;
-	int last_segment = first_segment + segments_per_page;
-	if (last_segment > state.segment_number)
-		last_segment = state.segment_number;
+        result_stream << "  " << segment.time_cost << "分";
+        if (is_public_transport_segment(segment)) {
+            int intermediate_stop_number =
+                segment.station_edge_number - 1;
+            if (intermediate_stop_number > 0)
+                result_stream << "  经" << intermediate_stop_number << "站";
+        }
 
-	int y = guide_title_y + 17;
+        set_ui_font(14);
+        result_text = truncate_gb2312_text_to_width(
+            result_stream.str(), 265);
+        outtextxy(920, y, result_text.c_str());
 
-	for (int i = first_segment; i < last_segment; i++) {
-		const route_segment& segment = state.segments[i];
+        set_ui_font(13);
+        string endpoint_text = build_route_endpoint_text(
+            get_entity_station_name(vertices, segment.start_vertex),
+            get_entity_station_name(vertices, segment.end_vertex),
+            255);
+        outtextxy(928, y + 15, endpoint_text.c_str());
 
-		result_stream.str("");
-		result_stream.clear();
-		result_stream << (i + 1) << ". ";
+        y += 30;
+    }
 
-		if (segment.type == edge_type::TRANSFER) {
-			if (segment.use_bike)
-				result_stream << "骑行";
-			else
-				result_stream << "步行";
-		}
-		else if (segment.line_id >= 0
-			&& segment.line_id < line_number) {
-			result_stream << "乘坐" << lines[segment.line_id].name;
-		}
-		else {
-			result_stream << "公共交通";
-		}
+    set_ui_font(14);
+    setlinecolor(RGB(150, 160, 170));
+    setfillcolor(RGB(245, 247, 250));
 
-		result_text = result_stream.str();
-		settextstyle(12, 0, "微软雅黑");
-		outtextxy(920, y, result_text.c_str());
-		y += 14;
+    if (state.guide_page > 0) {
+        solidrectangle(930, 672, 970, 696);
+        rectangle(930, 672, 970, 696);
+        outtextxy(946, 675, "<");
+    }
 
-		result_stream.str("");
-		result_stream.clear();
-		result_stream
-			<< get_entity_station_name(vertices, segment.start_vertex)
-			<< " -> "
-			<< get_entity_station_name(vertices, segment.end_vertex)
-			<< "，" << segment.time_cost << "分钟";
+    if (state.guide_page + 1 < total_pages) {
+        solidrectangle(1130, 672, 1170, 696);
+        rectangle(1130, 672, 1170, 696);
+        outtextxy(1146, 675, ">");
+    }
 
-		if (is_public_transport_segment(segment)) {
-			result_stream << "，" << fixed << setprecision(2)
-				<< segment.fare_cost << "元";
-
-			int intermediate_stop_number =
-				segment.station_edge_number - 1;
-			if (intermediate_stop_number > 0)
-				result_stream << "，经停"
-					<< intermediate_stop_number << "站";
-		}
-
-		result_text = result_stream.str();
-		settextstyle(10, 0, "微软雅黑");
-		y = draw_wrapped_text(
-			result_text, 928, y, 255, 12, 2);
-		y += 3;
-	}
-
-	settextstyle(13, 0, "微软雅黑");
-	setlinecolor(RGB(150, 160, 170));
-	setfillcolor(RGB(245, 247, 250));
-
-	if (state.guide_page > 0) {
-		solidrectangle(930, 670, 970, 695);
-		rectangle(930, 670, 970, 695);
-		outtextxy(946, 674, "<");
-	}
-
-	if (state.guide_page + 1 < total_pages) {
-		solidrectangle(1130, 670, 1170, 695);
-		rectangle(1130, 670, 1170, 695);
-		outtextxy(1146, 674, ">");
-	}
-
-	result_stream.str("");
-	result_stream.clear();
-	result_stream << (state.guide_page + 1)
-		<< " / " << total_pages;
-	result_text = result_stream.str();
-	outtextxy(1025, 674, result_text.c_str());
+    result_stream.str("");
+    result_stream.clear();
+    result_stream << (state.guide_page + 1) << " / " << total_pages;
+    result_text = result_stream.str();
+    outtextxy(1025, 675, result_text.c_str());
 }
 
 /***************************************************************************
   函数名称：draw_easyx_interface
   功    能：根据当前显示模式完整刷新EasyX界面
-  输入参数：const vertex vertices[]：顶点数组
-  int vertex_number：图中全部顶点数量
-  const transit_line lines[]：线路数组
-  int line_number：线路数量
-  const jiading_map_node map_nodes[]：嘉定局部图节点数组
-  int map_node_number：嘉定局部图节点数量
-  const IMAGE& jiading_background：嘉定校区官方底图
-  const ui_state& state：当前界面状态
+  输入参数：顶点、线路、嘉定局部图、背景图和当前ui_state
   返 回 值：无
-  说    明：嘉定局部图和全市总览共用右侧控制面板和路线结果区域
+  说    明：普通站名先绘制，换乘标记与起终点随后覆盖，保证路线重点信息优先可见
 ***************************************************************************/
 void draw_easyx_interface(
-	const vertex vertices[],
-	int vertex_number,
-	const transit_line lines[],
-	int line_number,
-	const jiading_map_node map_nodes[],
-	int map_node_number,
-	const IMAGE& jiading_background,
-	const ui_state& state)
+    const vertex vertices[],
+    int vertex_number,
+    const transit_line lines[],
+    int line_number,
+    const jiading_map_node map_nodes[],
+    int map_node_number,
+    const IMAGE& jiading_background,
+    const ui_state& state)
 {
-	setbkcolor(RGB(247, 250, 252));
-	cleardevice();
+    setbkcolor(RGB(247, 250, 252));
+    cleardevice();
 
-	if (state.is_jiading_campus) {
-		draw_jiading_campus_map(
-			vertices,
-			map_nodes,
-			map_node_number,
-			jiading_background,
-			state);
-	}
-	else {
-		draw_all_edges(vertices, vertex_number);
+    if (state.is_jiading_campus) {
+        draw_jiading_campus_map(
+            vertices, map_nodes, map_node_number,
+            jiading_background, state);
+    }
+    else {
+        draw_all_edges(vertices, vertex_number);
 
-		if (state.route_ready)
-			draw_route_highlight(vertices, state);
+        if (state.route_ready)
+            draw_route_highlight(vertices, state);
 
-		draw_all_vertices(vertices, vertex_number);
+        draw_all_vertices(vertices, vertex_number);
 
-		if (state.route_ready)
-			draw_global_transfer_marks(vertices, state);
+        if (state.show_all_names)
+            draw_all_station_names(vertices, vertex_number);
 
-		draw_selected_vertices(
-			vertices, vertex_number, state);
+        if (state.route_ready)
+            draw_global_transfer_marks(vertices, state);
 
-		if (state.show_all_names)
-			draw_all_station_names(vertices, vertex_number);
+        draw_selected_vertices(vertices, vertex_number, state);
+        draw_global_route_labels(vertices, state);
+    }
 
-		draw_global_route_labels(vertices, state);
-	}
+    draw_hovered_station(
+        vertices, map_nodes, map_node_number, state);
 
-	draw_hovered_station(
-		vertices, map_nodes, map_node_number, state);
+    setlinecolor(RGB(190, 200, 210));
+    setlinestyle(PS_SOLID, 1);
+    line(900, 0, 900, 700);
 
-	setlinecolor(RGB(190, 200, 210));
-	setlinestyle(PS_SOLID, 1);
-	line(900, 0, 900, 700);
+    draw_control_panel(vertices, vertex_number, state);
 
-	draw_control_panel(
-		vertices, vertex_number, state);
+    if (state.route_ready)
+        draw_route_result(vertices, lines, line_number, state);
 
-	if (state.route_ready)
-		draw_route_result(
-			vertices, lines,
-			line_number, state);
-
-	FlushBatchDraw();
+    FlushBatchDraw();
 }
 
 /***************************************************************************
@@ -2558,7 +2913,7 @@ void reset_ui_state(ui_state& state)
 
 	state.k = 0;
 	state.allow_bike = false;
-	state.show_all_names = false;
+	state.show_all_names = true;
 	state.is_jiading_campus = false;
 
 	state.start_hour = 8;
@@ -2726,7 +3081,7 @@ void handle_left_click(int mouse_x, int mouse_y,
 	}
 
 	if (state.route_ready && state.segment_number > 0) {
-		const int segments_per_page = 2;
+		const int segments_per_page = 4;
 		int total_pages =
 			(state.segment_number + segments_per_page - 1)
 			/ segments_per_page;
@@ -2992,6 +3347,7 @@ int main()
 		output_one_step_vertex(vertices[i]);
 #endif
 
+	SetProcessDPIAware();
 	initgraph(1200, 700, EX_SHOWCONSOLE);
 	IMAGE jiading_background;
 
