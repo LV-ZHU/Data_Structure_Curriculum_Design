@@ -22,11 +22,10 @@ jobs:
           from pathlib import Path
           import base64
           workflow = Path('/tmp/source_workflow.yml').read_text(encoding='utf-8')
-          marker = "| base64 -d > /tmp/refactor.py"
-          line = next((item.strip() for item in workflow.splitlines() if marker in item), None)
-          if line is None or not line.startswith("echo '"):
+          line = next((item.strip() for item in workflow.splitlines() if item.strip().startswith("echo 'ZnJv")), None)
+          if line is None:
               raise RuntimeError('找不到EasyX重构脚本数据')
-          payload = line.split("echo '", 1)[1].split("' | base64", 1)[0]
+          payload = line.split("echo '", 1)[1].rsplit("' | base64", 1)[0]
           script = base64.b64decode(payload).decode('utf-8')
           Path('/tmp/refactor.py').write_text(script, encoding='utf-8')
           print('重构脚本提取完成，字节数：', len(script.encode('utf-8')))
