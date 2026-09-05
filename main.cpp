@@ -1564,6 +1564,69 @@ void draw_schematic_connection(const vertex vertices[],
 }
 
 /***************************************************************************
+  函数名称：draw_schematic_connection
+  功    能：按轨道交通示意图方式绘制总览图中的一条连接
+  输入参数：const vertex vertices[]：顶点数组；int from_vertex：起点编号；
+  int to_vertex：终点编号；const edge_node* current_edge：当前边
+  返 回 值：无
+  说    明：普通边直接连接；两条教师班车沿总图外缘绕行，避免长直线切穿网络中心
+***************************************************************************/
+void draw_schematic_connection(const vertex vertices[],
+    int from_vertex, int to_vertex,
+    const edge_node* current_edge)
+{
+    int x1 = vertices[from_vertex].x;
+    int y1 = vertices[from_vertex].y;
+    int x2 = vertices[to_vertex].x;
+    int y2 = vertices[to_vertex].y;
+
+    if (!current_edge) {
+        line(x1, y1, x2, y2);
+        return;
+    }
+
+    int dx = x1 - x2;
+    int dy = y1 - y2;
+    int distance_square = dx * dx + dy * dy;
+
+    if (current_edge->type == edge_type::BUS
+        && current_edge->line_id == 10
+        && distance_square > 10000) {
+        const int route_y = 675;
+        line(x1, y1, x1, route_y);
+        line(x1, route_y, x2, route_y);
+        line(x2, route_y, x2, y2);
+        return;
+    }
+
+    if (current_edge->type == edge_type::BUS
+        && current_edge->line_id == 11
+        && distance_square > 10000) {
+        int left_x = x1;
+        int left_y = y1;
+        int right_x = x2;
+        int right_y = y2;
+
+        if (left_x > right_x) {
+            left_x = x2;
+            left_y = y2;
+            right_x = x1;
+            right_y = y1;
+        }
+
+        const int border_x = 24;
+        const int border_y = 22;
+        line(left_x, left_y, border_x, left_y);
+        line(border_x, left_y, border_x, border_y);
+        line(border_x, border_y, right_x, border_y);
+        line(right_x, border_y, right_x, right_y);
+        return;
+    }
+
+    line(x1, y1, x2, y2);
+}
+
+/***************************************************************************
   函数名称：draw_all_edges
   功    能：在EasyX窗口中绘制当前邻接表里的全部无向边
   输入参数：const vertex vertices[]：顶点数组
