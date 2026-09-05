@@ -35,10 +35,30 @@ jobs:
           decoded_prefix = base64.b64decode(padded_prefix).decode('utf-8', errors='ignore')
           raw_suffix = payload[len(prefix):]
           script = decoded_prefix + raw_suffix
+
           needle = 'text = path.read_bytes().decode("gb2312")\n'
           if needle not in script:
               raise RuntimeError('找不到源码读取语句')
           script = script.replace(needle, needle + 'text = text.replace("\\r\\n", "\\n").replace("\\r", "\\n")\n', 1)
+
+          marker_pattern = r'ui_start_marker\s*=.*?ui_end\s*=\s*text\.index\(ui_end_marker\)\n'
+          marker_replacement = '''ui_function_position = text.index("bool enable_high_dpi_rendering()")
+ui_start = text.rfind("/***************************************************************************", 0, ui_function_position)
+ui_end_function_position = text.index("void invalidate_route_result")
+ui_end = text.rfind("/***************************************************************************", 0, ui_end_function_position)
+'''
+          script, count = re.subn(marker_pattern, marker_replacement, script, count=1, flags=re.S)
+          if count != 1:
+              raise RuntimeError('替换EasyX区域定位逻辑失败')
+
+          input_pattern = r'input_start_marker\s*=.*?input_start\s*=\s*text\.index\(input_start_marker\)\n'
+          input_replacement = '''input_function_position = text.index("void handle_left_click(")
+input_start = text.rfind("/***************************************************************************", 0, input_function_position)
+'''
+          script, count = re.subn(input_pattern, input_replacement, script, count=1, flags=re.S)
+          if count != 1:
+              raise RuntimeError('替换输入区域定位逻辑失败')
+
           Path('/tmp/refactor.py').write_text(script, encoding='utf-8')
           compile(script, '/tmp/refactor.py', 'exec')
           print('重构脚本恢复完成，字节数：', len(script.encode('utf-8')))
