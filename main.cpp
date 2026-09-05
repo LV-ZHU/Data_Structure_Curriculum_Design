@@ -1428,32 +1428,32 @@ bool enable_high_dpi_rendering()
 // EasyX显示布局集中管理，避免界面代码到处散落硬编码坐标
 namespace ui_layout
 {
-    const int window_width = 1500;
-    const int window_height = 800;
-    const int map_width = 1120;
+    const int window_width = 2600;
+    const int window_height = 1500;
+    const int map_width = 2050;
     const int panel_left = map_width;
     const int panel_right = window_width;
 
-    const int network_left = 20;
-    const int network_right = 1100;
-    const int network_top = 20;
-    const int network_bottom = 625;
+    const int network_left = 35;
+    const int network_right = 2020;
+    const int network_top = 35;
+    const int network_bottom = 1255;
 
     const int logical_left = 40;
     const int logical_right = 890;
     const int logical_top = 60;
     const int logical_bottom = 610;
 
-    const int campus_list_left = 18;
-    const int campus_list_top = 642;
-    const int campus_list_right = 1102;
-    const int campus_list_bottom = 787;
+    const int campus_list_left = 24;
+    const int campus_list_top = 1280;
+    const int campus_list_right = 2026;
+    const int campus_list_bottom = 1482;
 
-    const int jiading_offset_x = 110;
-    const int jiading_offset_y = 50;
+    const int jiading_offset_x = 575;
+    const int jiading_offset_y = 260;
 
-    const int panel_content_left = 1142;
-    const int panel_content_right = 1478;
+    const int panel_content_left = 2090;
+    const int panel_content_right = 2560;
 }
 
 struct screen_point {
@@ -1494,7 +1494,7 @@ void lock_easyx_window_size()
     SetWindowLongPtr(easyx_window, GWL_STYLE, window_style);
 
     SetWindowPos(easyx_window, nullptr,
-        28, 8, 0, 0,
+        18, 8, 0, 0,
         SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
 }
 
@@ -1641,11 +1641,11 @@ void set_network_edge_style(const edge_node& edge)
     if (edge.type == edge_type::BUS) {
         if (edge.line_id == 10 || edge.line_id == 11) {
             setlinecolor(RGB(151, 177, 161));
-            setlinestyle(PS_DASH, 1);
+            setlinestyle(PS_DASH, 2);
         }
         else {
             setlinecolor(RGB(63, 143, 181));
-            setlinestyle(PS_SOLID, 2);
+            setlinestyle(PS_SOLID, 3);
         }
         return;
     }
@@ -1667,7 +1667,7 @@ void set_network_edge_style(const edge_node& edge)
             setlinecolor(RGB(70, 100, 150));
             break;
     }
-    setlinestyle(PS_SOLID, 4);
+    setlinestyle(PS_SOLID, 6);
 }
 
 /***************************************************************************
@@ -1729,9 +1729,9 @@ void draw_route_highlight(const vertex vertices[], int vertex_number,
 
         setlinecolor(RGB(255, 201, 35));
         if (route_edge->type == edge_type::TRANSFER)
-            setlinestyle(PS_DASH, 3);
+            setlinestyle(PS_DASH, 5);
         else
-            setlinestyle(PS_SOLID, 7);
+            setlinestyle(PS_SOLID, 10);
 
         line(from_point.x, from_point.y, to_point.x, to_point.y);
     }
@@ -1781,7 +1781,7 @@ void draw_total_map_vertices(const vertex vertices[], int vertex_number)
         else
             setlinecolor(RGB(216, 119, 39));
 
-        fillcircle(point.x, point.y, 5);
+        fillcircle(point.x, point.y, 7);
     }
 
     screen_point campus_point;
@@ -1789,7 +1789,42 @@ void draw_total_map_vertices(const vertex vertices[], int vertex_number)
     campus_point.y = scale_total_map_y(235);
     setfillcolor(RGB(255, 255, 255));
     setlinecolor(RGB(216, 119, 39));
-    fillcircle(campus_point.x, campus_point.y, 7);
+    fillcircle(campus_point.x, campus_point.y, 10);
+}
+
+/***************************************************************************
+  函数名称：get_map_display_name
+  功    能：生成总览图专用的简洁站名
+  输入参数：const vertex vertices[]：顶点数组；int vertex_id：物理节点编号
+  返 回 值：仅用于总览显示的精简名称
+  说    明：不修改CSV和算法站名，只缩短道路型公交站名称，减少密集区域文字拥挤
+***************************************************************************/
+string get_map_display_name(const vertex vertices[], int vertex_id)
+{
+    string name = get_entity_station_name(vertices, vertex_id);
+
+    const string road_prefixes[] = {
+        "曹安公路", "百安公路", "昌吉东路"
+    };
+    const int prefix_number =
+        sizeof(road_prefixes) / sizeof(road_prefixes[0]);
+
+    for (int i = 0; i < prefix_number; i++) {
+        const string& prefix = road_prefixes[i];
+        if (name.find(prefix) == 0 && name.size() > prefix.size())
+            return name.substr(prefix.size());
+    }
+
+    if (name == "公交昌吉东路站")
+        return "昌吉东路站";
+    if (name == "同济大学沪西校区教师班车点")
+        return "沪西校区班车点";
+    if (name == "同济大学沪北校区")
+        return "沪北校区";
+    if (name == "四平路校区西南门停车场")
+        return "四平路校区西南门";
+
+    return name;
 }
 
 /***************************************************************************
@@ -1806,7 +1841,7 @@ station_label_text build_station_label_text(const string& text, int max_width)
     if (textwidth(text.c_str()) <= max_width) {
         result.first_line = text;
         result.width = textwidth(text.c_str());
-        result.height = 15;
+        result.height = 22;
         result.line_number = 1;
         return result;
     }
@@ -1842,7 +1877,7 @@ station_label_text build_station_label_text(const string& text, int max_width)
     int second_width = textwidth(second_line.c_str());
     if (second_width > result.width)
         result.width = second_width;
-    result.height = 30;
+    result.height = 44;
     result.line_number = 2;
     return result;
 }
@@ -1857,7 +1892,7 @@ station_label_text build_station_label_text(const string& text, int max_width)
 int get_label_overlap_area(const station_label_rectangle& first,
     const station_label_rectangle& second)
 {
-    const int safe_gap = 2;
+    const int safe_gap = 6;
     int overlap_left = (first.left - safe_gap) > (second.left - safe_gap)
         ? (first.left - safe_gap) : (second.left - safe_gap);
     int overlap_top = (first.top - safe_gap) > (second.top - safe_gap)
@@ -1980,7 +2015,7 @@ station_label_rectangle choose_station_label_rectangle(
     const station_label_rectangle placed_rectangles[], int placed_number,
     const vertex vertices[], int vertex_number, int current_vertex)
 {
-    const int distances[] = { 8, 15, 24, 34, 46, 60, 78 };
+    const int distances[] = { 12, 22, 34, 48, 64, 82, 104, 128 };
     const int distance_number = sizeof(distances) / sizeof(distances[0]);
 
     station_label_rectangle best_candidate;
@@ -2022,13 +2057,13 @@ void draw_station_label(const station_label_rectangle& rectangle,
     solidrectangle(rectangle.left - 2, rectangle.top - 1,
         rectangle.right + 2, rectangle.bottom + 1);
 
-    set_map_font(13);
+    set_map_font(20);
     setbkmode(TRANSPARENT);
     settextcolor(RGB(28, 36, 48));
     outtextxy(rectangle.left, rectangle.top, label.first_line.c_str());
 
     if (label.line_number == 2)
-        outtextxy(rectangle.left, rectangle.top + 15, label.second_line.c_str());
+        outtextxy(rectangle.left, rectangle.top + 22, label.second_line.c_str());
 }
 
 /***************************************************************************
@@ -2054,7 +2089,7 @@ int get_station_label_density(const vertex vertices[], int vertex_number, int ve
         screen_point other = get_total_map_point(vertices, vertex_number, i);
         int dx = other.x - center.x;
         int dy = other.y - center.y;
-        if (dx * dx + dy * dy <= 95 * 95)
+        if (dx * dx + dy * dy <= 170 * 170)
             density++;
     }
 
@@ -2119,8 +2154,8 @@ void draw_all_station_names(const vertex vertices[], int vertex_number)
 
     for (int i = 0; i < label_number; i++) {
         int vertex_id = label_vertices[i];
-        string station_name = get_entity_station_name(vertices, vertex_id);
-        station_label_text label = build_station_label_text(station_name, 112);
+        string station_name = get_map_display_name(vertices, vertex_id);
+        station_label_text label = build_station_label_text(station_name, 180);
         screen_point point = get_total_map_point(vertices, vertex_number, vertex_id);
 
         station_label_rectangle chosen = choose_station_label_rectangle(
@@ -2133,7 +2168,7 @@ void draw_all_station_names(const vertex vertices[], int vertex_number)
     }
 
     string campus_text = "嘉定校区";
-    station_label_text campus_label = build_station_label_text(campus_text, 112);
+    station_label_text campus_label = build_station_label_text(campus_text, 180);
     screen_point campus_point;
     campus_point.x = scale_total_map_x(150);
     campus_point.y = scale_total_map_y(235);
@@ -2162,30 +2197,31 @@ void draw_jiading_station_list(const vertex vertices[])
     rectangle(ui_layout::campus_list_left, ui_layout::campus_list_top,
         ui_layout::campus_list_right, ui_layout::campus_list_bottom);
 
-    set_ui_font(14, FW_BOLD);
+    set_ui_font(20, FW_BOLD);
     settextcolor(RGB(42, 55, 70));
-    outtextxy(30, 650, "嘉定校区内部节点");
+    outtextxy(ui_layout::campus_list_left + 18,
+        ui_layout::campus_list_top + 14, "嘉定校区内部节点");
 
-    const int column_width = 260;
-    const int start_x = 30;
-    const int start_y = 676;
-    set_map_font(13);
+    const int column_width = 490;
+    const int start_x = ui_layout::campus_list_left + 18;
+    const int start_y = ui_layout::campus_list_top + 54;
+    set_map_font(20);
 
     for (int i = 56; i <= 63; i++) {
         int index = i - 56;
         int column = index % 4;
         int row = index / 4;
         int x = start_x + column * column_width;
-        int y = start_y + row * 50;
+        int y = start_y + row * 72;
 
         setfillcolor(RGB(220, 122, 36));
         solidcircle(x + 5, y + 8, 3);
 
-        station_label_text label = build_station_label_text(vertices[i].name, 225);
+        station_label_text label = build_station_label_text(vertices[i].name, 430);
         settextcolor(RGB(32, 42, 54));
         outtextxy(x + 14, y, label.first_line.c_str());
         if (label.line_number == 2)
-            outtextxy(x + 14, y + 15, label.second_line.c_str());
+            outtextxy(x + 14, y + 22, label.second_line.c_str());
     }
 }
 
