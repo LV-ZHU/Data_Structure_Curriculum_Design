@@ -1,0 +1,155 @@
+name: 显示优化
+on:
+  push:
+    branches:
+      - station-display-fix-final-2
+permissions:
+  contents: write
+jobs:
+  optimize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出临时分支
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: 保存优化脚本
+        shell: bash
+        run: |
+          cp .github/scripts/display_optimization.py /tmp/display_optimization.py
+          python3 -m py_compile /tmp/display_optimization.py
+      - name: 修改并检查源码
+        shell: bash
+        run: |
+          git fetch origin main
+          git checkout -B main origin/main
+          python3 /tmp/display_optimization.py
+
+          mkdir -p /tmp/stub
+          cat > /tmp/stub/windows.h <<'EOF'
+          #pragma once
+          #include <cstddef>
+          #include <cstdint>
+          typedef int BOOL;
+          typedef void* HANDLE;
+          typedef void* HMODULE;
+          typedef void* HWND;
+          typedef long long LONG_PTR;
+          typedef long long INT_PTR;
+          typedef unsigned char BYTE;
+          #define WINAPI
+          #define FALSE 0
+          #define TRUE 1
+          #define FW_NORMAL 400
+          #define FW_BOLD 700
+          #define GB2312_CHARSET 134
+          #define OUT_TT_PRECIS 4
+          #define CLIP_DEFAULT_PRECIS 0
+          #define CLEARTYPE_NATURAL_QUALITY 6
+          #define CLEARTYPE_QUALITY 5
+          #define DEFAULT_PITCH 0
+          #define FF_SWISS 32
+          #define FF_MODERN 48
+          #define LF_FACESIZE 32
+          #define GWL_STYLE -16
+          #define WS_THICKFRAME 0x00040000L
+          #define WS_MAXIMIZEBOX 0x00010000L
+          #define SWP_NOSIZE 0x0001
+          #define SWP_NOZORDER 0x0004
+          #define SWP_NOACTIVATE 0x0010
+          #define SWP_FRAMECHANGED 0x0020
+          struct LOGFONT { long lfHeight; long lfWidth; long lfEscapement; long lfOrientation; long lfWeight; BYTE lfItalic; BYTE lfUnderline; BYTE lfStrikeOut; BYTE lfCharSet; BYTE lfOutPrecision; BYTE lfClipPrecision; BYTE lfQuality; BYTE lfPitchAndFamily; char lfFaceName[LF_FACESIZE]; };
+          inline HMODULE GetModuleHandleA(const char*) { return nullptr; }
+          inline void* GetProcAddress(HMODULE, const char*) { return nullptr; }
+          inline BOOL SetProcessDPIAware() { return TRUE; }
+          inline LONG_PTR GetWindowLongPtr(HWND, int) { return 0; }
+          inline LONG_PTR SetWindowLongPtr(HWND, int, LONG_PTR) { return 0; }
+          inline BOOL SetWindowPos(HWND, HWND, int, int, int, int, unsigned int) { return TRUE; }
+          EOF
+
+          cat > /tmp/stub/graphics.h <<'EOF'
+          #pragma once
+          #include "windows.h"
+          #define EX_SHOWCONSOLE 1
+          #define EX_MOUSE 2
+          #define EX_KEY 4
+          #define EX_WINDOW 8
+          #define PS_SOLID 0
+          #define PS_DASH 1
+          #define TRANSPARENT 1
+          #define WM_CLOSE 0x0010
+          #define WM_KEYDOWN 0x0100
+          #define WM_MOUSEMOVE 0x0200
+          #define WM_LBUTTONDOWN 0x0201
+          #define VK_ESCAPE 0x1B
+          struct IMAGE {};
+          struct ExMessage { unsigned int message; int x; int y; unsigned short vkcode; };
+          inline unsigned long RGB(int, int, int) { return 0; }
+          inline void initgraph(int, int, int) {}
+          inline void closegraph() {}
+          inline HWND GetHWnd() { return nullptr; }
+          inline void setbkcolor(unsigned long) {}
+          inline void cleardevice() {}
+          inline void setlinecolor(unsigned long) {}
+          inline void setlinestyle(int, int = 1) {}
+          inline void line(int, int, int, int) {}
+          inline void setfillcolor(unsigned long) {}
+          inline void fillcircle(int, int, int) {}
+          inline void solidcircle(int, int, int) {}
+          inline void solidrectangle(int, int, int, int) {}
+          inline void rectangle(int, int, int, int) {}
+          inline void putimage(int, int, const IMAGE*) {}
+          inline void loadimage(IMAGE*, const char*) {}
+          inline void setbkmode(int) {}
+          inline void settextcolor(unsigned long) {}
+          inline void settextstyle(const LOGFONT*) {}
+          inline int textwidth(const char*) { return 100; }
+          inline int textheight(const char*) { return 20; }
+          inline void outtextxy(int, int, const char*) {}
+          inline void BeginBatchDraw() {}
+          inline void EndBatchDraw() {}
+          inline void FlushBatchDraw() {}
+          inline ExMessage getmessage(int) { return ExMessage{}; }
+          EOF
+
+          g++ -std=c++17 -fsyntax-only -finput-charset=GB2312 -fexec-charset=GB2312 -I/tmp/stub main.cpp
+
+          python3 - <<'PY'
+          from pathlib import Path
+          raw = Path('main.cpp').read_bytes()
+          text = raw.decode('gb2312')
+          if b'\n' in raw.replace(b'\r\n', b''):
+              raise RuntimeError('main.cpp存在非CRLF换行')
+          forbidden = [
+              '嘉定校区内部节点',
+              '总览始终展示全部站名，校内站点见左下角',
+              'draw_jiading_station_list',
+          ]
+          for item in forbidden:
+              if item in text:
+                  raise RuntimeError('仍有待删除内容: ' + item)
+          required = [
+              'const int window_width = 2600;',
+              'const int window_height = 1500;',
+              'does_network_edge_cross_label',
+              'get_map_display_name',
+              'draw_jiading_campus_map',
+              'draw_route_result',
+          ]
+          for item in required:
+              if item not in text:
+                  raise RuntimeError('缺少必要结构: ' + item)
+          print('C++17静态语法检查通过')
+          print('GB2312 + CRLF检查通过')
+          print('冗余底栏和提示已删除')
+          print('站名避线逻辑已启用')
+          PY
+      - name: 提交到main
+        shell: bash
+        run: |
+          git config user.name "LV-ZHU"
+          git config user.email "212522225+LV-ZHU@users.noreply.github.com"
+          git add main.cpp
+          git diff --cached --stat
+          git commit -m "显示优化"
+          git push origin HEAD:main
