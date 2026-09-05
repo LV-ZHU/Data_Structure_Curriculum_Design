@@ -155,8 +155,10 @@ jobs:
               draw_station_label(campus_rectangle, campus_label);'''
           text = text[:campus_start] + new_campus + text[campus_end:]
 
-          if text.count('get_manual_station_label_rectangle') != 2:
-              raise SystemExit('人工站名函数数量异常')
+          if 'bool get_manual_station_label_rectangle(int vertex_id,' not in text:
+              raise SystemExit('人工站名函数未插入')
+          if 'case 64: logical_x = 110; logical_y = 300;' not in text:
+              raise SystemExit('人工站点坐标未插入')
           if text.count('{') != text.count('}'):
               raise SystemExit('花括号数量不平衡')
 
