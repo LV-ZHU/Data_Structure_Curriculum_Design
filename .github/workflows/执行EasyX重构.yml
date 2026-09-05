@@ -35,30 +35,20 @@ jobs:
           decoded_prefix = base64.b64decode(padded_prefix).decode('utf-8', errors='ignore')
           raw_suffix = payload[len(prefix):]
           script = decoded_prefix + raw_suffix
-
           needle = 'text = path.read_bytes().decode("gb2312")\n'
           if needle not in script:
               raise RuntimeError('找不到源码读取语句')
           script = script.replace(needle, needle + 'text = text.replace("\\r\\n", "\\n").replace("\\r", "\\n")\n', 1)
-
           marker_pattern = r'ui_start_marker\s*=.*?ui_end\s*=\s*text\.index\(ui_end_marker\)\n'
-          marker_replacement = '''ui_function_position = text.index("bool enable_high_dpi_rendering()")
-ui_start = text.rfind("/***************************************************************************", 0, ui_function_position)
-ui_end_function_position = text.index("void invalidate_route_result")
-ui_end = text.rfind("/***************************************************************************", 0, ui_end_function_position)
-'''
+          marker_replacement = 'ui_function_position = text.index("bool enable_high_dpi_rendering()")\nui_start = text.rfind("/***************************************************************************", 0, ui_function_position)\nui_end_function_position = text.index("void invalidate_route_result")\nui_end = text.rfind("/***************************************************************************", 0, ui_end_function_position)\n'
           script, count = re.subn(marker_pattern, marker_replacement, script, count=1, flags=re.S)
           if count != 1:
               raise RuntimeError('替换EasyX区域定位逻辑失败')
-
           input_pattern = r'input_start_marker\s*=.*?input_start\s*=\s*text\.index\(input_start_marker\)\n'
-          input_replacement = '''input_function_position = text.index("void handle_left_click(")
-input_start = text.rfind("/***************************************************************************", 0, input_function_position)
-'''
+          input_replacement = 'input_function_position = text.index("void handle_left_click(")\ninput_start = text.rfind("/***************************************************************************", 0, input_function_position)\n'
           script, count = re.subn(input_pattern, input_replacement, script, count=1, flags=re.S)
           if count != 1:
               raise RuntimeError('替换输入区域定位逻辑失败')
-
           Path('/tmp/refactor.py').write_text(script, encoding='utf-8')
           compile(script, '/tmp/refactor.py', 'exec')
           print('重构脚本恢复完成，字节数：', len(script.encode('utf-8')))
@@ -69,7 +59,6 @@ input_start = text.rfind("/*****************************************************
           git fetch origin main
           git checkout -B main origin/main
           python3 /tmp/refactor.py
-
           mkdir -p /tmp/stub
           cat > /tmp/stub/windows.h <<'EOF'
           #pragma once
@@ -103,12 +92,7 @@ input_start = text.rfind("/*****************************************************
           #define SWP_NOZORDER 0x0004
           #define SWP_NOACTIVATE 0x0010
           #define SWP_FRAMECHANGED 0x0020
-          struct LOGFONT {
-              long lfHeight; long lfWidth; long lfEscapement; long lfOrientation; long lfWeight;
-              BYTE lfItalic; BYTE lfUnderline; BYTE lfStrikeOut; BYTE lfCharSet;
-              BYTE lfOutPrecision; BYTE lfClipPrecision; BYTE lfQuality; BYTE lfPitchAndFamily;
-              char lfFaceName[LF_FACESIZE];
-          };
+          struct LOGFONT { long lfHeight; long lfWidth; long lfEscapement; long lfOrientation; long lfWeight; BYTE lfItalic; BYTE lfUnderline; BYTE lfStrikeOut; BYTE lfCharSet; BYTE lfOutPrecision; BYTE lfClipPrecision; BYTE lfQuality; BYTE lfPitchAndFamily; char lfFaceName[LF_FACESIZE]; };
           inline HMODULE GetModuleHandleA(const char*) { return nullptr; }
           inline void* GetProcAddress(HMODULE, const char*) { return nullptr; }
           inline BOOL SetProcessDPIAware() { return TRUE; }
@@ -116,7 +100,6 @@ input_start = text.rfind("/*****************************************************
           inline LONG_PTR SetWindowLongPtr(HWND, int, LONG_PTR) { return 0; }
           inline BOOL SetWindowPos(HWND, HWND, int, int, int, int, unsigned int) { return TRUE; }
           EOF
-
           cat > /tmp/stub/graphics.h <<'EOF'
           #pragma once
           #include "windows.h"
@@ -161,7 +144,6 @@ input_start = text.rfind("/*****************************************************
           inline void FlushBatchDraw() {}
           inline ExMessage getmessage(int) { return ExMessage{}; }
           EOF
-
           g++ -std=c++17 -fsyntax-only -finput-charset=GB2312 -fexec-charset=GB2312 -I/tmp/stub main.cpp
           python3 - <<'PY'
           from pathlib import Path
