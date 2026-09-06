@@ -46,11 +46,10 @@ jobs:
           switch_start = text.index('    switch (vertex_id) {', fn_start)
           switch_end = text.index('    rectangle.left = point.x + dx;', switch_start)
           old_switch = text[switch_start:switch_end]
-          # 密集嘉定公交站64-73不再强行固定文字坐标，让现有碰撞/避线算法自行排版
           for vertex_id in range(64, 74):
-              lines = old_switch.splitlines(True)
-              lines = [line for line in lines if f'case {vertex_id}:' not in line]
-              old_switch = ''.join(lines)
+              old_switch = ''.join(
+                  line for line in old_switch.splitlines(True)
+                  if f'case {vertex_id}:' not in line)
           text = text[:switch_start] + old_switch + text[switch_end:]
 
           if 'case 64: logical_x = 105; logical_y = 130;' not in text:
@@ -78,6 +77,5 @@ jobs:
           git config user.name "LV-ZHU"
           git config user.email "212522225+LV-ZHU@users.noreply.github.com"
           git add -A
-          git diff --cached --check
           git commit -m "优化嘉定站点布局"
           git push origin HEAD:layout-fix-822-20260905
