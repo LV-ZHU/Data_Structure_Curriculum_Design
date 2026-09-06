@@ -1619,19 +1619,33 @@ screen_point get_total_map_point(const vertex vertices[],
         logical_y = 235;
     }
 
-    // 822路沿“封浜公交站 -> 嘉定校区正门”直线方向排布，封浜公交站紧贴封浜地铁站
+    // 嘉定公交总览采用人工示意坐标：两条校区接驳线分开排布，822沿封浜至嘉定校区方向展开
     switch (physical_vertex) {
-        case 74: logical_x = 325; logical_y = 355; break; // 封浜公交站
-        case 75: logical_x = 310; logical_y = 345; break; // 翔江路
-        case 76: logical_x = 294; logical_y = 336; break; // 曹丰路
-        case 77: logical_x = 279; logical_y = 326; break; // 宝园五路
-        case 78: logical_x = 263; logical_y = 317; break; // 宝园七路
-        case 79: logical_x = 248; logical_y = 307; break; // 联西路
-        case 80: logical_x = 232; logical_y = 298; break; // 联群路
-        case 81: logical_x = 217; logical_y = 288; break; // 星塔路
-        case 82: logical_x = 201; logical_y = 279; break; // 许家东街村
-        case 83: logical_x = 186; logical_y = 269; break; // 新黄公路
-        case 84: logical_x = 170; logical_y = 260; break; // 嘉松北路
+        // 嘉定西侧两条公交走廊：保持与昌吉东路、上海汽车城的换乘关系，同时避免节点堆叠
+        case 64: logical_x = 105; logical_y = 130; break; // 昌吉东路站
+        case 65: logical_x = 80;  logical_y = 145; break; // 双浦路
+        case 66: logical_x = 58;  logical_y = 162; break; // 于塘南路
+        case 67: logical_x = 52;  logical_y = 185; break; // 望融路
+        case 68: logical_x = 78;  logical_y = 207; break; // 安虹北路
+        case 69: logical_x = 115; logical_y = 220; break; // 绿苑路
+
+        case 70: logical_x = 72;  logical_y = 158; break; // 安谐路
+        case 71: logical_x = 92;  logical_y = 180; break; // 于田路
+        case 72: logical_x = 112; logical_y = 200; break; // 安虹路
+        case 73: logical_x = 132; logical_y = 218; break; // 二十三号桥
+
+        // 822路：封浜公交站几乎贴住封浜地铁站，再沿直线向嘉定校区收束
+        case 74: logical_x = 317; logical_y = 357; break; // 封浜公交站
+        case 75: logical_x = 303; logical_y = 347; break; // 翔江路
+        case 76: logical_x = 289; logical_y = 337; break; // 曹丰路
+        case 77: logical_x = 275; logical_y = 327; break; // 宝园五路
+        case 78: logical_x = 261; logical_y = 317; break; // 宝园七路
+        case 79: logical_x = 247; logical_y = 307; break; // 联西路
+        case 80: logical_x = 233; logical_y = 297; break; // 联群路
+        case 81: logical_x = 219; logical_y = 287; break; // 星塔路
+        case 82: logical_x = 205; logical_y = 277; break; // 许家东街村
+        case 83: logical_x = 191; logical_y = 267; break; // 新黄公路
+        case 84: logical_x = 177; logical_y = 257; break; // 嘉松北路
         default: break;
     }
 
@@ -2267,16 +2281,6 @@ bool get_manual_station_label_rectangle(int vertex_id,
         case 29: dx = -120; dy = -42; break; // 昌吉东路
         case 30: dx = -78;  dy = 24;  break; // 上海汽车城
 
-        case 64: dx = 22;   dy = -38; break; // 昌吉东路站
-        case 65: dx = -100; dy = -26; break; // 双浦路
-        case 66: dx = -40;  dy = 28;  break; // 于塘南路
-        case 67: dx = -40;  dy = 22;  break; // 望融路
-        case 68: dx = -100; dy = 20;  break; // 安虹北路
-        case 69: dx = 20;   dy = 20;  break; // 绿苑路
-        case 70: dx = 18;   dy = 12;  break; // 安谐路
-        case 71: dx = -80;  dy = 14;  break; // 于田路
-        case 72: dx = 20;   dy = -34; break; // 安虹路
-        case 73: dx = -100; dy = 20;  break; // 二十三号桥
 
         case 47: dx = -62;  dy = -36; break; // 封浜地铁
         case 74: dx = 18;   dy = 12;  break; // 封浜公交站
