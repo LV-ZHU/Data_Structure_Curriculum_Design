@@ -1,0 +1,104 @@
+name: jiading-cartography-final
+
+on:
+  push:
+    branches:
+      - jiading-cartography-final
+    paths:
+      - .github/workflows/jiading-cartography-final.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: jiading-cartography-final
+          fetch-depth: 0
+
+      - name: 重排嘉定周边版图
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('main.cpp')
+          raw = path.read_bytes()
+          encoding = None
+          for candidate in ('gb2312', 'utf-8'):
+              try:
+                  text = raw.decode(candidate)
+                  encoding = candidate
+                  break
+              except UnicodeDecodeError:
+                  pass
+          if encoding is None:
+              raise SystemExit('无法识别main.cpp字符集')
+
+          text = text.replace('\r\n', '\n').replace('\r', '\n')
+
+          # 1. 撤销64-73的人为站点位移，恢复CSV中的真实相对关系；只保留822的示意走廊。
+          coord_start = text.index('    // 嘉定公交总览采用人工示意坐标')
+          coord_end = text.index('    screen_point point;\n', coord_start)
+          new_coords = '''    // 嘉定周边优先保持CSV中的真实相对关系；仅将822整理成封浜至嘉定校区的连续走廊\n    switch (physical_vertex) {\n        case 74: logical_x = 318; logical_y = 364; break; // 封浜公交站，紧邻封浜地铁站\n        case 75: logical_x = 303; logical_y = 354; break; // 翔江路\n        case 76: logical_x = 288; logical_y = 344; break; // 曹丰路\n        case 77: logical_x = 273; logical_y = 334; break; // 宝园五路\n        case 78: logical_x = 258; logical_y = 324; break; // 宝园七路\n        case 79: logical_x = 243; logical_y = 314; break; // 联西路\n        case 80: logical_x = 228; logical_y = 304; break; // 联群路\n        case 81: logical_x = 213; logical_y = 294; break; // 星塔路\n        case 82: logical_x = 198; logical_y = 284; break; // 许家东街村\n        case 83: logical_x = 183; logical_y = 274; break; // 新黄公路\n        case 84: logical_x = 168; logical_y = 264; break; // 嘉松北路\n        default: break;\n    }\n\n'''
+          text = text[:coord_start] + new_coords + text[coord_end:]
+
+          # 2. 修正标签测量字号：布局计算和实际绘制都使用20px，避免“计算不重叠、实际文字却重叠”。
+          old_font = '    set_map_font(13);\n\n    for (int i = 0; i < label_number; i++) {'
+          if old_font not in text:
+              raise SystemExit('未找到站名布局字号锚点')
+          text = text.replace(old_font,
+              '    set_map_font(20);\n\n    for (int i = 0; i < label_number; i++) {', 1)
+
+          # 3. 自动布局只允许在站点附近小范围寻找，不能为了避让把名字甩到远处。
+          old_distances = '    const int distances[] = { 12, 22, 34, 48, 64, 82, 104, 128 };'
+          if old_distances not in text:
+              raise SystemExit('未找到自动布局距离数组')
+          text = text.replace(old_distances,
+              '    const int distances[] = { 12, 22, 34, 48, 64 };', 1)
+          if '    int score = distance * 3;' not in text:
+              raise SystemExit('未找到距离惩罚')
+          text = text.replace('    int score = distance * 3;',
+              '    int score = distance * 6;', 1)
+          text = text.replace('最大偏移78像素，不再把站名拉到很远并连大量灰线',
+              '最大偏移64像素，优先保持站名与所属站点的视觉邻近关系')
+
+          # 4. 嘉定周边固定示意图直接人工排字：标签始终贴近自己的圆点，不再依赖自动优化器。
+          fn_start = text.index('bool get_manual_station_label_rectangle(int vertex_id,')
+          switch_start = text.index('    switch (vertex_id) {', fn_start)
+          switch_end = text.index('    rectangle.left = point.x + dx;', switch_start)
+          new_switch = '''    switch (vertex_id) {\n        // 11号线嘉定段\n        case 28: dx = -42;  dy = -34; break; // 上海赛车场\n        case 27: dx = -42;  dy = -34; break; // 嘉定新城\n        case 26: dx = 14;   dy = -24; break; // 马陆\n        case 25: dx = 14;   dy = -24; break; // 陈翔公路\n        case 24: dx = 14;   dy = -24; break; // 南翔\n        case 29: dx = -110; dy = -38; break; // 昌吉东路\n        case 30: dx = -70;  dy = 28;  break; // 上海汽车城\n\n        // 昌吉东路、上海汽车城与嘉定校区之间的两条公交走廊\n        case 64: dx = 18;   dy = -34; break; // 昌吉东路站\n        case 65: dx = -70;  dy = -28; break; // 双浦路\n        case 66: dx = 2;    dy = -40; break; // 于塘南路\n        case 67: dx = 16;   dy = -10; break; // 望融路\n        case 68: dx = -78;  dy = 18;  break; // 安虹北路\n        case 69: dx = 18;   dy = -34; break; // 绿苑路\n        case 70: dx = 20;   dy = -40; break; // 安谐路\n        case 71: dx = 18;   dy = 16;  break; // 于田路\n        case 72: dx = -78;  dy = 18;  break; // 安虹路\n        case 73: dx = -94;  dy = 18;  break; // 二十三号桥\n\n        // 14号线封浜与822换乘区域\n        case 46: dx = -58;  dy = -38; break; // 乐秀路\n        case 47: dx = -68;  dy = 18;  break; // 封浜地铁\n        case 74: dx = 20;   dy = 18;  break; // 封浜公交站\n        case 75: dx = -72;  dy = -34; break; // 翔江路\n\n        // 822其余站点沿线路两侧交错排布\n        case 76: dx = 18;   dy = 12;  break; // 曹丰路\n        case 77: dx = -92;  dy = -32; break; // 宝园五路\n        case 78: dx = 18;   dy = 12;  break; // 宝园七路\n        case 79: dx = -72;  dy = -32; break; // 联西路\n        case 80: dx = 18;   dy = 12;  break; // 联群路\n        case 81: dx = -72;  dy = -32; break; // 星塔路\n        case 82: dx = 18;   dy = 12;  break; // 许家东街村\n        case 83: dx = -94;  dy = -32; break; // 新黄公路\n        case 84: dx = 18;   dy = 12;  break; // 嘉松北路\n        default: return false;\n    }\n\n'''
+          text = text[:switch_start] + new_switch + text[switch_end:]
+
+          # 5. 三组独立结构核对：真实坐标、交通拓扑对应点、标签距离上限。
+          coord_section = text[coord_start:text.index('    screen_point point;', coord_start)]
+          for vertex_id in range(64, 74):
+              if f'case {vertex_id}: logical_x' in coord_section:
+                  raise SystemExit(f'{vertex_id}号站仍被人工移动，未恢复CSV相对位置')
+          if 'case 74: logical_x = 318; logical_y = 364;' not in coord_section:
+              raise SystemExit('封浜公交站显示位置不正确')
+          if 'case 84: logical_x = 168; logical_y = 264;' not in coord_section:
+              raise SystemExit('822末端显示位置不正确')
+          if '{ 12, 22, 34, 48, 64 }' not in text:
+              raise SystemExit('标签最大偏移未限制为64像素')
+          if text.count('{') != text.count('}'):
+              raise SystemExit('花括号数量不平衡')
+
+          out = text.replace('\n', '\r\n').encode(encoding)
+          path.write_bytes(out)
+          check = path.read_bytes()
+          check.decode(encoding)
+          if b'\n' in check.replace(b'\r\n', b''):
+              raise SystemExit('存在非CRLF换行')
+          print('嘉定周边版图重排完成；字符集保持', encoding, '；CRLF检查通过')
+
+      - name: 提交修改
+        run: |
+          rm .github/workflows/jiading-cartography-final.yml
+          git config user.name "LV-ZHU"
+          git config user.email "212522225+LV-ZHU@users.noreply.github.com"
+          git add main.cpp .github/workflows/jiading-cartography-final.yml
+          git commit -m "重新优化嘉定周边布局"
+          git push origin HEAD:jiading-cartography-final
