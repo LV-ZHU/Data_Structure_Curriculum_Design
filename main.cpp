@@ -2282,9 +2282,10 @@ bool get_manual_station_label_rectangle(int vertex_id,
         case 30: dx = -78;  dy = 24;  break; // 上海汽车城
 
 
-        case 47: dx = -62;  dy = -36; break; // 封浜地铁
-        case 74: dx = 18;   dy = 12;  break; // 封浜公交站
-        case 75: dx = 18;   dy = -32; break; // 翔江路
+        case 46: dx = 14;   dy = -46; break; // 乐秀路
+        case 47: dx = -56;  dy = 22;  break; // 封浜地铁
+        case 74: dx = 20;   dy = 24;  break; // 封浜公交站
+        case 75: dx = -88;  dy = -44; break; // 翔江路
         case 76: dx = -70;  dy = 14;  break; // 曹丰路
         case 77: dx = 18;   dy = -32; break; // 宝园五路
         case 78: dx = -78;  dy = 14;  break; // 宝园七路
