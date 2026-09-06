@@ -1,8 +1,13 @@
+#define _CRT_SECURE_NO_WARNINGS
 #include <iostream>
 #include <fstream>
 #include <sstream>
 #include <string>
 #include <climits>
+#include <vector>
+#include <algorithm>
+#include <cstdlib>
+#include <cmath>
 #include <limits>
 #include <iomanip>
 #include <stdexcept>
@@ -26,96 +31,96 @@ const int physical_vertex_number = 92; //前92个为EasyX可见、可点击的真实物理节点
 const int max_lines = 50;//线路最多50条
 
 enum class edge_type { METRO, BUS, TRANSFER };//边类型：地铁，公交，换乘
-enum class station_type{METRO, BUS};//站点类型:地铁，公交
+enum class station_type { METRO, BUS };//站点类型:地铁，公交
 
 //边结构体，E
 struct edge_node {
-	int to = INT_MAX;//目标顶点编号
-	int time_cost = INT_MAX;//这条边记录的耗时
-	double fare_cost = std::numeric_limits<double>::infinity();//费用
-	edge_type type = edge_type::METRO;//边的类型，默认为地铁
-	int line_id = -1; //步行(骑行)默认-1，由于有多条地铁和公交，该字段联合type可确定具体是哪一条线路
-	int bike_time_cost = -1;//地铁和公交默认-1，换乘情况若可骑行则改为对应骑行时间
-	edge_node* next = nullptr;//指向同一邻接链表中的下一个边结点
+    int to = INT_MAX;//目标顶点编号
+    int time_cost = INT_MAX;//这条边记录的耗时
+    double fare_cost = std::numeric_limits<double>::infinity();//费用
+    edge_type type = edge_type::METRO;//边的类型，默认为地铁
+    int line_id = -1; //步行(骑行)默认-1，由于有多条地铁和公交，该字段联合type可确定具体是哪一条线路
+    int bike_time_cost = -1;//地铁和公交默认-1，换乘情况若可骑行则改为对应骑行时间
+    edge_node* next = nullptr;//指向同一邻接链表中的下一个边结点
 };
 //顶点结构体，V
 struct vertex {
-	int id = INT_MAX;//站点编号
-	string name = "";//站点名称
-	station_type type = station_type::METRO;//站点类型，默认为地铁
-	edge_node* first_edge = nullptr;//邻接链表的第一个边节点地址
-	int x;//EasyX需要的站点圆心x坐标
-	int y;//EasyX需要的站点圆心y坐标
+    int id = INT_MAX;//站点编号
+    string name = "";//站点名称
+    station_type type = station_type::METRO;//站点类型，默认为地铁
+    edge_node* first_edge = nullptr;//邻接链表的第一个边节点地址
+    int x;//EasyX需要的站点圆心x坐标
+    int y;//EasyX需要的站点圆心y坐标
 };
 //候选顶点及其距离结构体
 struct heap_node {
-	int vertex_id;//顶点编号
-	double distance;//当前距离
+    int vertex_id;//顶点编号
+    double distance;//当前距离
 };
 //最小堆
 struct min_heap {
-	heap_node* data = nullptr;//当前指向元素位置
-	int size = 0;//当前实际存有的堆元素数量，用来控制下标小于size防止读取时越界
-	int capacity = 0;//当前数组最多能容纳多少个元素，应该始终满足0≤size≤capacity
+    heap_node* data = nullptr;//当前指向元素位置
+    int size = 0;//当前实际存有的堆元素数量，用来控制下标小于size防止读取时越界
+    int capacity = 0;//当前数组最多能容纳多少个元素，应该始终满足0≤size≤capacity
 };
 //线路表
 struct transit_line {
-	int id = -1;//线路编号，等于线路在数组里的下标
-	string name = "";//线路中文名称
-	edge_type type= edge_type::METRO;//线路类型，默认为地铁，只允许是地铁/公交类型不允许为换乘
+    int id = -1;//线路编号，等于线路在数组里的下标
+    string name = "";//线路中文名称
+    edge_type type = edge_type::METRO;//线路类型，默认为地铁，只允许是地铁/公交类型不允许为换乘
 };
 //路线阶段：把Dijkstra原始边压缩成用户真正看到的一整段行程
 struct route_segment {
-	int start_vertex = -1;//本段起点物理顶点编号
-	int end_vertex = -1;//本段终点物理顶点编号
-	edge_type type = edge_type::TRANSFER;//地铁、公交或换乘
-	int line_id = -1;//地铁/公交线路编号，步行/骑行保持-1
-	bool use_bike = false;//TRANSFER边实际是否选择骑行
-	int time_cost = 0;//本段累计耗时
-	double fare_cost = 0;//本段累计费用
-	int station_edge_number = 0;//本段真正跨越的物理站间边数量
+    int start_vertex = -1;//本段起点物理顶点编号
+    int end_vertex = -1;//本段终点物理顶点编号
+    edge_type type = edge_type::TRANSFER;//地铁、公交或换乘
+    int line_id = -1;//地铁/公交线路编号，步行/骑行保持-1
+    bool use_bike = false;//TRANSFER边实际是否选择骑行
+    int time_cost = 0;//本段累计耗时
+    double fare_cost = 0;//本段累计费用
+    int station_edge_number = 0;//本段真正跨越的物理站间边数量
 };
 //嘉定部分
 struct jiading_map_node {
-	int vertex_id = -1;       //原图中的物理顶点编号
-	int x = 0;                //嘉定局部图中的圆心x
-	int y = 0;                //嘉定局部图中的圆心y
-	int label_x = 0;          //标签左上角x
-	int label_y = 0;          //标签左上角y
-	string short_name = "";   //局部图显示的短名称
+    int vertex_id = -1;       //原图中的物理顶点编号
+    int x = 0;                //嘉定局部图中的圆心x
+    int y = 0;                //嘉定局部图中的圆心y
+    int label_x = 0;          //标签左上角x
+    int label_y = 0;          //标签左上角y
+    string short_name = "";   //局部图显示的短名称
 };
 //EasyX界面状态
 struct ui_state {
-	int start_vertex = -1;
-	int end_vertex = -1;
-	int k = 0;
-	bool allow_bike = false;
-	bool show_all_names = true;
+    int start_vertex = -1;
+    int end_vertex = -1;
+    int k = 0;
+    bool allow_bike = false;
+    bool show_all_names = true;
 
-	int start_hour = 8;
-	int start_minute = 30;
+    int start_hour = 8;
+    int start_minute = 30;
 
-	double distance[max_vertices];
-	int previous_vertex[max_vertices];
-	const edge_node* previous_edge[max_vertices];
-	int path[max_vertices];
-	int path_vertex_number = 0;
+    double distance[max_vertices];
+    int previous_vertex[max_vertices];
+    const edge_node* previous_edge[max_vertices];
+    int path[max_vertices];
+    int path_vertex_number = 0;
 
-	route_segment segments[max_vertices];
-	int segment_number = 0;
-	int guide_page = 0;
-	int stop_number = 0;
-	int hovered_vertex = -1;
+    route_segment segments[max_vertices];
+    int segment_number = 0;
+    int guide_page = 0;
+    int stop_number = 0;
+    int hovered_vertex = -1;
 
-	int total_time_cost = 0;
-	double total_fare_cost = 0;
-	int arrival_hour = 0;
-	int arrival_minute = 0;
-	int days_passed = 0;
+    int total_time_cost = 0;
+    double total_fare_cost = 0;
+    int arrival_hour = 0;
+    int arrival_minute = 0;
+    int days_passed = 0;
 
-	bool route_ready = false;
-	string message = "请选择起点";
-	bool is_jiading_campus = false;
+    bool route_ready = false;
+    string message = "请选择起点";
+    bool is_jiading_campus = false;
 };
 /***************************************************************************
   函数名称：add_transit_line
@@ -129,15 +134,15 @@ struct ui_state {
 ***************************************************************************/
 bool add_transit_line(transit_line lines[], int& line_number, string line_name, edge_type line_type)
 {
-	if (line_number >= max_lines)
-		return false;
-	if (line_type != edge_type::METRO && line_type != edge_type::BUS)
-		return false;
-	lines[line_number].id = line_number;//添加前lines里有0..line_number-1线路，现在在line_number位置添加变为0..line_number
-	lines[line_number].name = line_name;
-	lines[line_number].type = line_type;
-	line_number++;
-	return true;
+    if (line_number >= max_lines)
+        return false;
+    if (line_type != edge_type::METRO && line_type != edge_type::BUS)
+        return false;
+    lines[line_number].id = line_number;//添加前lines里有0..line_number-1线路，现在在line_number位置添加变为0..line_number
+    lines[line_number].name = line_name;
+    lines[line_number].type = line_type;
+    line_number++;
+    return true;
 }
 
 /***************************************************************************
@@ -149,8 +154,8 @@ bool add_transit_line(transit_line lines[], int& line_number, string line_name, 
 ***************************************************************************/
 void remove_trailing_carriage_return(string& text)
 {
-	if (!text.empty() && text.back() == '\r')
-		text.pop_back();
+    if (!text.empty() && text.back() == '\r')
+        text.pop_back();
 }
 
 /***************************************************************************
@@ -162,126 +167,126 @@ void remove_trailing_carriage_return(string& text)
   返 回 值：true代表读取成功，false代表读取失败
   说    明：const string&避免无意义复制；line_number需要修改所以用引用
 ***************************************************************************/
-bool load_transit_lines(const string& file_path, transit_line lines[], int &line_number)
+bool load_transit_lines(const string& file_path, transit_line lines[], int& line_number)
 {
-	ifstream lines_file(file_path);
-	if (!lines_file.is_open()) {
-		cout << "线路CSV文件无法打开，无法进行后续计算" << endl;
-		return false;
-	}
-	string header;
-	if (!getline(lines_file, header)) {//把lines_file第一行内容拿出，放入header里，当前文件指针位于第二行开头
-		cout << "首行信息读取失败" << endl;
-		return false;
-	}
-	remove_trailing_carriage_return(header);
-	if (header.substr(0, 3) == "\xEF\xBB\xBF")
-		header.erase(0, 3);//UTF8 BOM格式标识符是EF、BB、BF，如果是BOM格式去除前缀，非BOM格式的正常CSV则会跳过该if 
+    ifstream lines_file(file_path);
+    if (!lines_file.is_open()) {
+        cout << "线路CSV文件无法打开，无法进行后续计算" << endl;
+        return false;
+    }
+    string header;
+    if (!getline(lines_file, header)) {//把lines_file第一行内容拿出，放入header里，当前文件指针位于第二行开头
+        cout << "首行信息读取失败" << endl;
+        return false;
+    }
+    remove_trailing_carriage_return(header);
+    if (header.substr(0, 3) == "\xEF\xBB\xBF")
+        header.erase(0, 3);//UTF8 BOM格式标识符是EF、BB、BF，如果是BOM格式去除前缀，非BOM格式的正常CSV则会跳过该if 
 #if test_csv_lines
-	cout << "首行header为：" << header << endl;
+    cout << "首行header为：" << header << endl;
 #endif
-	if (header != "id,name,type") {
-		cout << "该文件首行不是id,name,type，可能不是线路文件，请检查data/lines.csv 内容" << endl;
-		return false;
-	}
+    if (header != "id,name,type") {
+        cout << "该文件首行不是id,name,type，可能不是线路文件，请检查data/lines.csv 内容" << endl;
+        return false;
+    }
 
-	string data_line;
-	while (getline(lines_file, data_line)) {
-		remove_trailing_carriage_return(data_line);
+    string data_line;
+    while (getline(lines_file, data_line)) {
+        remove_trailing_carriage_return(data_line);
 #if test_csv_lines
-		cout << "线路数据为：" << data_line << endl;
+        cout << "线路数据为：" << data_line << endl;
 #endif
-		string line_id_text;
-		string line_name_text;
-		string line_type_text;
-		stringstream line_stream(data_line);
-		if (!getline(line_stream, line_id_text, ',') || !getline(line_stream, line_name_text, ',')
-			|| !getline(line_stream, line_type_text, ',')) {//逐个获取三个字段，每次遇到,就停止
-			cout << "线路数据字段不完整" << endl;
-			return false;
-		}
+        string line_id_text;
+        string line_name_text;
+        string line_type_text;
+        stringstream line_stream(data_line);
+        if (!getline(line_stream, line_id_text, ',') || !getline(line_stream, line_name_text, ',')
+            || !getline(line_stream, line_type_text, ',')) {//逐个获取三个字段，每次遇到,就停止
+            cout << "线路数据字段不完整" << endl;
+            return false;
+        }
 
-		int line_id;
-		try {
-			line_id = stoi(line_id_text);
-		}
-		catch (const invalid_argument&) {//检查参数是否合法
-			cout << "线路编号不是合法整数" << endl;
-			return false;
-		}
-		catch (const out_of_range&) {//检查参数是否超过int范围
-			cout << "线路编号超范围" << endl;
-			return false;
-		}
-		edge_type line_type;
-		if (line_type_text == "METRO")
-			line_type = edge_type::METRO;
-		else if (line_type_text == "BUS")
-			line_type = edge_type::BUS;
-		else {
-			cout << "线路类型既不是地铁也不是公交，非法" << endl;
-			return false;
-		}
+        int line_id;
+        try {
+            line_id = stoi(line_id_text);
+        }
+        catch (const invalid_argument&) {//检查参数是否合法
+            cout << "线路编号不是合法整数" << endl;
+            return false;
+        }
+        catch (const out_of_range&) {//检查参数是否超过int范围
+            cout << "线路编号超范围" << endl;
+            return false;
+        }
+        edge_type line_type;
+        if (line_type_text == "METRO")
+            line_type = edge_type::METRO;
+        else if (line_type_text == "BUS")
+            line_type = edge_type::BUS;
+        else {
+            cout << "线路类型既不是地铁也不是公交，非法" << endl;
+            return false;
+        }
 
 #if test_csv_lines
-		cout << "线路id为：" << line_id << endl;
-		cout << "线路名称为：" << line_name_text << endl;
-		cout << "线路类型为：" << line_type_text << endl;
+        cout << "线路id为：" << line_id << endl;
+        cout << "线路名称为：" << line_name_text << endl;
+        cout << "线路类型为：" << line_type_text << endl;
 
 #endif	
 
-		if (line_number == line_id) {//校验当前线路编号和CSV文件里读到的是否一致
-			if (add_transit_line(lines, line_number, line_name_text, line_type)) {
+        if (line_number == line_id) {//校验当前线路编号和CSV文件里读到的是否一致
+            if (add_transit_line(lines, line_number, line_name_text, line_type)) {
 #if test_csv_lines
-				cout << lines[line_id].id << " " << lines[line_id].name << endl;
+                cout << lines[line_id].id << " " << lines[line_id].name << endl;
 #endif
-			}
-			else {
-				cout << "线路初始化失败" << endl;
-				return false;
-			}
-		}
-		else {
-			cout << "线路编号不连续或顺序错误" << endl;
-			return false;
-		}
-	}
-	if (line_number == 0) {//只有表头没有具体线路
-		cout << "线路CSV中没有有效线路数据" << endl;
-		return false;
-	}
-	lines_file.close();//关文件
+            }
+            else {
+                cout << "线路初始化失败" << endl;
+                return false;
+            }
+        }
+        else {
+            cout << "线路编号不连续或顺序错误" << endl;
+            return false;
+        }
+    }
+    if (line_number == 0) {//只有表头没有具体线路
+        cout << "线路CSV中没有有效线路数据" << endl;
+        return false;
+    }
+    lines_file.close();//关文件
 
-	return true;
+    return true;
 }
 
 /***************************************************************************
   函数名称：add_directed_edge
   功    能：用头插法添加一条边，由于添加的是有向边，在无向边情况下两个方向各调用一次该函数
   输入参数：vertex& from_vertex：要修改的顶点，
-	int to：目标顶点编号，
-	int time_cost：耗时，
-	double fare_cost：费用，
-	edge_type type：边类型，
-	int line_id：仅公交/地铁时代表线路号，换乘边默认-1
-	int bike_time_cost：仅存在骑行且type为transfer时才赋值，其余时候默认-1
+    int to：目标顶点编号，
+    int time_cost：耗时，
+    double fare_cost：费用，
+    edge_type type：边类型，
+    int line_id：仅公交/地铁时代表线路号，换乘边默认-1
+    int bike_time_cost：仅存在骑行且type为transfer时才赋值，其余时候默认-1
   返 回 值：空
   说    明：修改来源顶点的 first_edge，把新边插入邻接链表
 ***************************************************************************/
-void add_directed_edge(vertex& from_vertex, int to, int time_cost, double fare_cost, edge_type type, int line_id = -1,int bike_time_cost = -1)
+void add_directed_edge(vertex& from_vertex, int to, int time_cost, double fare_cost, edge_type type, int line_id = -1, int bike_time_cost = -1)
 {
-	edge_node* new_edge = new edge_node;
-	new_edge->to = to;
-	new_edge->time_cost = time_cost;
-	new_edge->fare_cost = fare_cost;
-	new_edge->type = type;
-	new_edge->next = from_vertex.first_edge;
-	if (new_edge->type == edge_type::METRO || new_edge->type == edge_type::BUS)
-		new_edge->line_id = line_id;
-	else if (new_edge->type == edge_type::TRANSFER)
-		new_edge->bike_time_cost = bike_time_cost;
-	from_vertex.first_edge = new_edge;
-	
+    edge_node* new_edge = new edge_node;
+    new_edge->to = to;
+    new_edge->time_cost = time_cost;
+    new_edge->fare_cost = fare_cost;
+    new_edge->type = type;
+    new_edge->next = from_vertex.first_edge;
+    if (new_edge->type == edge_type::METRO || new_edge->type == edge_type::BUS)
+        new_edge->line_id = line_id;
+    else if (new_edge->type == edge_type::TRANSFER)
+        new_edge->bike_time_cost = bike_time_cost;
+    from_vertex.first_edge = new_edge;
+
 }
 
 /***************************************************************************
@@ -291,10 +296,10 @@ void add_directed_edge(vertex& from_vertex, int to, int time_cost, double fare_c
   返 回 值：空
   说    明：添加无向边
 ***************************************************************************/
-void add_undirected_edge(vertex& first_vertex, vertex& second_vertex, int time_cost, double fare_cost, edge_type type, int line_id = -1,int bike_time_cost = -1)
+void add_undirected_edge(vertex& first_vertex, vertex& second_vertex, int time_cost, double fare_cost, edge_type type, int line_id = -1, int bike_time_cost = -1)
 {
-	add_directed_edge(first_vertex, second_vertex.id, time_cost, fare_cost, type, line_id, bike_time_cost);
-	add_directed_edge(second_vertex, first_vertex.id, time_cost, fare_cost, type, line_id, bike_time_cost);
+    add_directed_edge(first_vertex, second_vertex.id, time_cost, fare_cost, type, line_id, bike_time_cost);
+    add_directed_edge(second_vertex, first_vertex.id, time_cost, fare_cost, type, line_id, bike_time_cost);
 }
 
 /***************************************************************************
@@ -306,11 +311,11 @@ void add_undirected_edge(vertex& first_vertex, vertex& second_vertex, int time_c
 ***************************************************************************/
 void release_edges(vertex& release_vertex)
 {
-	while (release_vertex.first_edge) {
-		edge_node *next_node= release_vertex.first_edge->next;
-		delete release_vertex.first_edge;
-		release_vertex.first_edge = next_node;
-	}
+    while (release_vertex.first_edge) {
+        edge_node* next_node = release_vertex.first_edge->next;
+        delete release_vertex.first_edge;
+        release_vertex.first_edge = next_node;
+    }
 }
 
 /***************************************************************************
@@ -322,16 +327,16 @@ void release_edges(vertex& release_vertex)
 ***************************************************************************/
 void output_one_step_vertex(vertex& start_station)
 {
-	if (start_station.first_edge == nullptr)
-		cout << "该节点为孤立顶点，当前站点暂无可用路线" << endl;
-	else {
-		edge_node* current_edge = start_station.first_edge;//指针从站点第一个节点开始
-		while (current_edge) {
-			cout << current_edge->to << " ";
-			current_edge = current_edge->next;
-		}
-		cout << endl;
-	}
+    if (start_station.first_edge == nullptr)
+        cout << "该节点为孤立顶点，当前站点暂无可用路线" << endl;
+    else {
+        edge_node* current_edge = start_station.first_edge;//指针从站点第一个节点开始
+        while (current_edge) {
+            cout << current_edge->to << " ";
+            current_edge = current_edge->next;
+        }
+        cout << endl;
+    }
 }
 
 /***************************************************************************
@@ -348,17 +353,17 @@ void output_one_step_vertex(vertex& start_station)
 ***************************************************************************/
 bool add_vertex(vertex vertices[max_vertices], int& vertex_number, string vertex_name, station_type type, int x, int y)
 {
-	if (vertex_number >= max_vertices)
-		return false;//超额，添加失败
-	else {
-		vertices[vertex_number].id = vertex_number;//id即为当前号码
-		vertices[vertex_number].name = vertex_name;
-		vertices[vertex_number].type= type;
-		vertices[vertex_number].x = x;
-		vertices[vertex_number].y = y;
-		vertex_number++;//全添加完再自增
-		return true;
-	}	
+    if (vertex_number >= max_vertices)
+        return false;//超额，添加失败
+    else {
+        vertices[vertex_number].id = vertex_number;//id即为当前号码
+        vertices[vertex_number].name = vertex_name;
+        vertices[vertex_number].type = type;
+        vertices[vertex_number].x = x;
+        vertices[vertex_number].y = y;
+        vertex_number++;//全添加完再自增
+        return true;
+    }
 }
 
 /***************************************************************************
@@ -372,106 +377,106 @@ bool add_vertex(vertex vertices[max_vertices], int& vertex_number, string vertex
 ***************************************************************************/
 bool load_vertices(const string& file_path, vertex vertices[], int& vertex_number)
 {
-	ifstream stations_file(file_path);
-	if (!stations_file.is_open()) {
-		cout << "站点CSV文件无法打开，无法进行后续计算" << endl;
-		return false;
-	}
-	string header;	
-	if (!getline(stations_file, header)) {//把stations_file第一行内容拿出，放入header里，当前文件指针位于第二行开头
-		cout << "首行信息读取失败" << endl;
-		return false;
-	}
-	remove_trailing_carriage_return(header);
-	if (header.substr(0, 3) == "\xEF\xBB\xBF")
-		header.erase(0, 3);//UTF8 BOM格式标识符是EF、BB、BF，如果是BOM格式去除前缀，非BOM格式的正常CSV则会跳过该if 
+    ifstream stations_file(file_path);
+    if (!stations_file.is_open()) {
+        cout << "站点CSV文件无法打开，无法进行后续计算" << endl;
+        return false;
+    }
+    string header;
+    if (!getline(stations_file, header)) {//把stations_file第一行内容拿出，放入header里，当前文件指针位于第二行开头
+        cout << "首行信息读取失败" << endl;
+        return false;
+    }
+    remove_trailing_carriage_return(header);
+    if (header.substr(0, 3) == "\xEF\xBB\xBF")
+        header.erase(0, 3);//UTF8 BOM格式标识符是EF、BB、BF，如果是BOM格式去除前缀，非BOM格式的正常CSV则会跳过该if 
 #if test_csv_lines
-	cout << "首行header为：" << header << endl;
+    cout << "首行header为：" << header << endl;
 #endif
-	if (header != "id,name,type,x,y") {
-		cout << "该文件首行不是id,name,type，可能不是站点文件，请检查data/stations.csv 内容" << endl;
-		return false;
-	}
+    if (header != "id,name,type,x,y") {
+        cout << "该文件首行不是id,name,type，可能不是站点文件，请检查data/stations.csv 内容" << endl;
+        return false;
+    }
 
-	string data_line;
-	while (getline(stations_file, data_line)) {
-		remove_trailing_carriage_return(data_line);
+    string data_line;
+    while (getline(stations_file, data_line)) {
+        remove_trailing_carriage_return(data_line);
 #if test_csv_lines
-		cout << "站点数据为：" << data_line << endl;
+        cout << "站点数据为：" << data_line << endl;
 #endif
-		string station_id_text;
-		string station_name_text;
-		string station_type_text;
-		string station_x_text;
-		string station_y_text;
-		stringstream station_stream(data_line);
-		if (!getline(station_stream, station_id_text, ',') 
-			|| !getline(station_stream, station_name_text, ',')
-			|| !getline(station_stream, station_type_text, ',')
-			|| !getline(station_stream, station_x_text, ',')
-			|| !getline(station_stream, station_y_text, ',')
-			) {//逐个获取五个字段，每次遇到,就停止
-			cout << "站点数据字段不完整" << endl;
-			return false;
-		}
+        string station_id_text;
+        string station_name_text;
+        string station_type_text;
+        string station_x_text;
+        string station_y_text;
+        stringstream station_stream(data_line);
+        if (!getline(station_stream, station_id_text, ',')
+            || !getline(station_stream, station_name_text, ',')
+            || !getline(station_stream, station_type_text, ',')
+            || !getline(station_stream, station_x_text, ',')
+            || !getline(station_stream, station_y_text, ',')
+            ) {//逐个获取五个字段，每次遇到,就停止
+            cout << "站点数据字段不完整" << endl;
+            return false;
+        }
 
-		int station_id;
-		int station_x;
-		int station_y;
-		try {
-			station_id = stoi(station_id_text);
-			station_x = stoi(station_x_text);
-			station_y = stoi(station_y_text);
-		}
-		catch (const invalid_argument&) {//检查参数是否合法
-			cout << "站点编号/坐标不是合法整数" << endl;
-			return false;
-		}
-		catch (const out_of_range&) {//检查参数是否超过int范围
-			cout << "站点编号/坐标超范围" << endl;
-			return false;
-		}
-		station_type parsed_station_type;
-		if (station_type_text == "METRO")
-			parsed_station_type = station_type::METRO;
-		else if (station_type_text == "BUS")
-			parsed_station_type = station_type::BUS;
-		else {//一般不会执行到这里
-			cout << "站点类型既不是地铁也不是公交，不在枚举类型里，非法" << endl;
-			return false;
-		}
+        int station_id;
+        int station_x;
+        int station_y;
+        try {
+            station_id = stoi(station_id_text);
+            station_x = stoi(station_x_text);
+            station_y = stoi(station_y_text);
+        }
+        catch (const invalid_argument&) {//检查参数是否合法
+            cout << "站点编号/坐标不是合法整数" << endl;
+            return false;
+        }
+        catch (const out_of_range&) {//检查参数是否超过int范围
+            cout << "站点编号/坐标超范围" << endl;
+            return false;
+        }
+        station_type parsed_station_type;
+        if (station_type_text == "METRO")
+            parsed_station_type = station_type::METRO;
+        else if (station_type_text == "BUS")
+            parsed_station_type = station_type::BUS;
+        else {//一般不会执行到这里
+            cout << "站点类型既不是地铁也不是公交，不在枚举类型里，非法" << endl;
+            return false;
+        }
 
 #if test_csv_lines
-		cout << "站点id为：" << station_id << endl;
-		cout << "站点名称为：" << station_name_text << endl;
-		cout << "站点类型为：" << station_type_text << endl;
-		cout << "站点x坐标为：" << station_x_text << endl;
-		cout << "站点y坐标为：" << station_y_text << endl;
+        cout << "站点id为：" << station_id << endl;
+        cout << "站点名称为：" << station_name_text << endl;
+        cout << "站点类型为：" << station_type_text << endl;
+        cout << "站点x坐标为：" << station_x_text << endl;
+        cout << "站点y坐标为：" << station_y_text << endl;
 #endif	
 
-		if (vertex_number == station_id) {//校验当前站点编号和CSV文件里读到的是否一致
-			if (add_vertex(vertices, vertex_number, station_name_text, parsed_station_type, station_x, station_y)) {
+        if (vertex_number == station_id) {//校验当前站点编号和CSV文件里读到的是否一致
+            if (add_vertex(vertices, vertex_number, station_name_text, parsed_station_type, station_x, station_y)) {
 #if test_csv_lines
-				cout << vertices[station_id].id << " " << vertices[station_id].name << endl;
+                cout << vertices[station_id].id << " " << vertices[station_id].name << endl;
 #endif
-			}
-			else {
-				cout << "站点初始化失败" << endl;
-				return false;
-			}
-		}
-		else {
-			cout << "站点编号不连续或顺序错误" << endl;
-			return false;
-		}
-	}
-	if (vertex_number == 0) {//只有表头没有具体站点
-		cout << "站点CSV中没有有效站点数据" << endl;
-		return false;
-	}
-	stations_file.close();//关文件
+            }
+            else {
+                cout << "站点初始化失败" << endl;
+                return false;
+            }
+        }
+        else {
+            cout << "站点编号不连续或顺序错误" << endl;
+            return false;
+        }
+    }
+    if (vertex_number == 0) {//只有表头没有具体站点
+        cout << "站点CSV中没有有效站点数据" << endl;
+        return false;
+    }
+    stations_file.close();//关文件
 
-	return true;
+    return true;
 }
 
 /***************************************************************************
@@ -482,15 +487,15 @@ bool load_vertices(const string& file_path, vertex vertices[], int& vertex_numbe
   返 回 值：false表示失败，true表示成功
   说    明：
 ***************************************************************************/
-bool initialize_heap(min_heap& heap,int initial_capacity)
+bool initialize_heap(min_heap& heap, int initial_capacity)
 {
-	if (initial_capacity <= 0|| heap.data)//容量非正或data已经存放了地址
-		return false;
-	heap_node* p = new heap_node[initial_capacity];
-	heap.data = p;//data字段指向动态堆数组的第一个元素
-	heap.size = 0;
-	heap.capacity = initial_capacity;
-	return true;
+    if (initial_capacity <= 0 || heap.data)//容量非正或data已经存放了地址
+        return false;
+    heap_node* p = new heap_node[initial_capacity];
+    heap.data = p;//data字段指向动态堆数组的第一个元素
+    heap.size = 0;
+    heap.capacity = initial_capacity;
+    return true;
 }
 
 /***************************************************************************
@@ -502,14 +507,14 @@ bool initialize_heap(min_heap& heap,int initial_capacity)
 ***************************************************************************/
 void swap_heap_node(heap_node& node1, heap_node& node2)
 {
-	heap_node tmp;
+    heap_node tmp;
 
-	tmp.vertex_id = node1.vertex_id;
-	tmp.distance = node1.distance;
-	node1.vertex_id = node2.vertex_id;
-	node1.distance = node2.distance;
-	node2.vertex_id = tmp.vertex_id;
-	node2.distance = tmp.distance;
+    tmp.vertex_id = node1.vertex_id;
+    tmp.distance = node1.distance;
+    node1.vertex_id = node2.vertex_id;
+    node1.distance = node2.distance;
+    node2.vertex_id = tmp.vertex_id;
+    node2.distance = tmp.distance;
 }
 
 /***************************************************************************
@@ -521,17 +526,17 @@ void swap_heap_node(heap_node& node1, heap_node& node2)
 ***************************************************************************/
 void sift_up(min_heap& heap, int index)
 {
-	while (index > 0) {
-		int father = (index - 1) / 2;
-		double father_distance = heap.data[father].distance;
-		double index_distance = heap.data[index].distance;
-		if (father_distance > index_distance) {
-			swap_heap_node(heap.data[father], heap.data[index]);
-			index = father;//如果交换，交换后将index赋值为父节点的值
-		}
-		else
-			break;//该节点已经到了正确的位置上
-	}
+    while (index > 0) {
+        int father = (index - 1) / 2;
+        double father_distance = heap.data[father].distance;
+        double index_distance = heap.data[index].distance;
+        if (father_distance > index_distance) {
+            swap_heap_node(heap.data[father], heap.data[index]);
+            index = father;//如果交换，交换后将index赋值为父节点的值
+        }
+        else
+            break;//该节点已经到了正确的位置上
+    }
 }
 
 /***************************************************************************
@@ -543,15 +548,15 @@ void sift_up(min_heap& heap, int index)
 ***************************************************************************/
 bool expand_heap(min_heap& heap)
 {
-	if (!heap.data || (heap.capacity <= 0))
-		return false;
-	heap_node* bigger_heap = new heap_node[heap.capacity * 2];
-	for (int i = 0; i < heap.size; i++)
-		bigger_heap[i] = heap.data[i];//复制，heap.size不变
-	delete[] heap.data;//释放
-	heap.data = bigger_heap;//data指向新堆
-	heap.capacity *= 2;
-	return true;
+    if (!heap.data || (heap.capacity <= 0))
+        return false;
+    heap_node* bigger_heap = new heap_node[heap.capacity * 2];
+    for (int i = 0; i < heap.size; i++)
+        bigger_heap[i] = heap.data[i];//复制，heap.size不变
+    delete[] heap.data;//释放
+    heap.data = bigger_heap;//data指向新堆
+    heap.capacity *= 2;
+    return true;
 }
 
 /***************************************************************************
@@ -565,17 +570,17 @@ bool expand_heap(min_heap& heap)
 ***************************************************************************/
 bool insert_heap(min_heap& heap, int vertex_id, double distance)
 {
-	if (!heap.data)
-		return false;
-	if( heap.size >= heap.capacity) {//其实只能=，所以只需要扩一次容即可，不需要while循环
-		if (!expand_heap(heap))
-			return false;//没return就完成了扩容
-	}
-	(heap.data + heap.size)->vertex_id = vertex_id;//等价于(*(heap.data + heap.size)).vertex_id或是heap.data[heap.size].vertex_id
-	(heap.data + heap.size)->distance = distance;
-	heap.size++;//插入完后实际数量加1
-	sift_up(heap, heap.size - 1);//这里不和上一行换顺序是因为要把新元素正式纳入有效范围
-	return true;
+    if (!heap.data)
+        return false;
+    if (heap.size >= heap.capacity) {//其实只能=，所以只需要扩一次容即可，不需要while循环
+        if (!expand_heap(heap))
+            return false;//没return就完成了扩容
+    }
+    (heap.data + heap.size)->vertex_id = vertex_id;//等价于(*(heap.data + heap.size)).vertex_id或是heap.data[heap.size].vertex_id
+    (heap.data + heap.size)->distance = distance;
+    heap.size++;//插入完后实际数量加1
+    sift_up(heap, heap.size - 1);//这里不和上一行换顺序是因为要把新元素正式纳入有效范围
+    return true;
 }
 
 /***************************************************************************
@@ -587,30 +592,30 @@ bool insert_heap(min_heap& heap, int vertex_id, double distance)
 ***************************************************************************/
 void sift_down(min_heap& heap, int index)
 {
-	while (2 * index + 1 < heap.size) { //左孩子在下标0..(heap.size-1)范围内
-		int left_child = 2 * index + 1;
-		int right_child = 2 * index + 2;
-		double left_child_distance = heap.data[left_child].distance;
-		double index_distance = heap.data[index].distance;
-		if (right_child >= heap.size) {//这个时候只有左孩子
-			if (index_distance > left_child_distance) {
-				swap_heap_node(heap.data[left_child], heap.data[index]);
-				index = left_child;
-			}
-			break;//堆是完全二叉树，唯一的左孩子必然是最后一个元素也是叶子结点，所以处理完它之后无论是否交换，本轮下沉都已经结束，而不是else
-		}
-		double right_child_distance = heap.data[right_child].distance;//有右孩子才能拿对应下标
-		if (index_distance < left_child_distance && index_distance < right_child_distance)//父最小，已到位
-			break;
-		else if (left_child_distance <= right_child_distance) {//左不超过右侧，父节点和较小的左换
-			swap_heap_node(heap.data[left_child], heap.data[index]);
-			index = left_child;
-		}
-		else {//换父和右
-			swap_heap_node(heap.data[right_child], heap.data[index]);
-			index = right_child;
-		}
-	}
+    while (2 * index + 1 < heap.size) { //左孩子在下标0..(heap.size-1)范围内
+        int left_child = 2 * index + 1;
+        int right_child = 2 * index + 2;
+        double left_child_distance = heap.data[left_child].distance;
+        double index_distance = heap.data[index].distance;
+        if (right_child >= heap.size) {//这个时候只有左孩子
+            if (index_distance > left_child_distance) {
+                swap_heap_node(heap.data[left_child], heap.data[index]);
+                index = left_child;
+            }
+            break;//堆是完全二叉树，唯一的左孩子必然是最后一个元素也是叶子结点，所以处理完它之后无论是否交换，本轮下沉都已经结束，而不是else
+        }
+        double right_child_distance = heap.data[right_child].distance;//有右孩子才能拿对应下标
+        if (index_distance < left_child_distance && index_distance < right_child_distance)//父最小，已到位
+            break;
+        else if (left_child_distance <= right_child_distance) {//左不超过右侧，父节点和较小的左换
+            swap_heap_node(heap.data[left_child], heap.data[index]);
+            index = left_child;
+        }
+        else {//换父和右
+            swap_heap_node(heap.data[right_child], heap.data[index]);
+            index = right_child;
+        }
+    }
 }
 
 /***************************************************************************
@@ -620,12 +625,12 @@ void sift_down(min_heap& heap, int index)
   返 回 值：true代表确实空，false代表并不空
   说    明：只根据size是否为0判断，不根据data判断，因为已经初始化但没有元素时，data不为空但堆仍然是空堆。
 ***************************************************************************/
-bool is_heap_empty(const min_heap &heap)
+bool is_heap_empty(const min_heap& heap)
 {
-	if (heap.size == 0)
-		return true;
-	else
-		return false;
+    if (heap.size == 0)
+        return true;
+    else
+        return false;
 }
 
 /***************************************************************************
@@ -638,14 +643,14 @@ bool is_heap_empty(const min_heap &heap)
 ***************************************************************************/
 bool extract_min(min_heap& heap, heap_node& minimum_node)
 {
-	if (is_heap_empty(heap))
-		return false;
-	minimum_node = heap.data[0];//存放堆顶元素
-	heap.data[0] = heap.data[heap.size - 1];
-	heap.size--;//位置-1
-	sift_down(heap, 0);//从堆顶开始下沉
+    if (is_heap_empty(heap))
+        return false;
+    minimum_node = heap.data[0];//存放堆顶元素
+    heap.data[0] = heap.data[heap.size - 1];
+    heap.size--;//位置-1
+    sift_down(heap, 0);//从堆顶开始下沉
 
-	return true;
+    return true;
 }
 
 /***************************************************************************
@@ -655,12 +660,12 @@ bool extract_min(min_heap& heap, heap_node& minimum_node)
   返 回 值：无
   说    明：先释放data对象动态内存申请的数组，然后重置结构体里各个成员的值
 ***************************************************************************/
-void release_heap(min_heap& heap) 
+void release_heap(min_heap& heap)
 {
-	delete[] heap.data;
-	heap.data = nullptr;
-	heap.size = 0;
-	heap.capacity = 0;
+    delete[] heap.data;
+    heap.data = nullptr;
+    heap.size = 0;
+    heap.capacity = 0;
 }
 
 /***************************************************************************
@@ -672,10 +677,10 @@ void release_heap(min_heap& heap)
 ***************************************************************************/
 int get_effective_time_cost(const edge_node& node, bool allow_bike = false)
 {
-	if (allow_bike && node.type == edge_type::TRANSFER && node.bike_time_cost >= 0 && node.bike_time_cost < node.time_cost)
-		return node.bike_time_cost;
-	else
-		return node.time_cost;
+    if (allow_bike && node.type == edge_type::TRANSFER && node.bike_time_cost >= 0 && node.bike_time_cost < node.time_cost)
+        return node.bike_time_cost;
+    else
+        return node.time_cost;
 }
 
 /***************************************************************************
@@ -685,9 +690,9 @@ int get_effective_time_cost(const edge_node& node, bool allow_bike = false)
   返 回 值：算式的结果
   说    明：由于不用修改node且为结构体，所以用常量引用
 ***************************************************************************/
-double calculate_weight(const edge_node & node, double k, bool allow_bike = false)
+double calculate_weight(const edge_node& node, double k, bool allow_bike = false)
 {
-	return get_effective_time_cost(node, allow_bike) + k * node.fare_cost;
+    return get_effective_time_cost(node, allow_bike) + k * node.fare_cost;
 }
 
 /***************************************************************************
@@ -700,16 +705,16 @@ double calculate_weight(const edge_node & node, double k, bool allow_bike = fals
   返 回 值：空
   说    明：用cout打印数组各个元素，因为只用读所以传参用const，只有调试的时候需要用到这个函数记录变化状态
 ***************************************************************************/
-void output_dijkstra_arrays(const string& prompt,const double distance[], const int previous_vertex[], int vertex_number)
+void output_dijkstra_arrays(const string& prompt, const double distance[], const int previous_vertex[], int vertex_number)
 {
-	cout << prompt << endl << "distance: ";
-	for (int i = 0; i < vertex_number; i++)
-		cout << distance[i] << "  ";
-	cout << endl;
-	cout << "previous_vertex: ";
-	for (int i = 0; i < vertex_number; i++)
-		cout << previous_vertex[i] << "  ";
-	cout << endl << endl;
+    cout << prompt << endl << "distance: ";
+    for (int i = 0; i < vertex_number; i++)
+        cout << distance[i] << "  ";
+    cout << endl;
+    cout << "previous_vertex: ";
+    for (int i = 0; i < vertex_number; i++)
+        cout << previous_vertex[i] << "  ";
+    cout << endl << endl;
 }
 
 /***************************************************************************
@@ -719,12 +724,12 @@ void output_dijkstra_arrays(const string& prompt,const double distance[], const 
   返 回 值：true表示在范围内，false表示不在范围内
   说    明：很多函数需要检查vertex_id是否在正确的数组下标范围内，可调用该函数
 ***************************************************************************/
-bool is_valid_vertex_id(const int vertex_id,const int vertex_number)
+bool is_valid_vertex_id(const int vertex_id, const int vertex_number)
 {
-	if (vertex_id >= 0 && vertex_id < vertex_number)
-		return true;//开始下标应该在0..vertex_number-1之间，数组下标
-	else
-		return false;
+    if (vertex_id >= 0 && vertex_id < vertex_number)
+        return true;//开始下标应该在0..vertex_number-1之间，数组下标
+    else
+        return false;
 }
 
 /***************************************************************************
@@ -740,178 +745,178 @@ bool is_valid_vertex_id(const int vertex_id,const int vertex_number)
 ***************************************************************************/
 bool load_edges(const string& file_path, vertex vertices[], int vertex_number, const transit_line lines[], int line_number)
 {
-	ifstream edges_file(file_path);
-	if (!edges_file.is_open()) {
-		cout << "边CSV文件无法打开，无法进行后续计算" << endl;
-		return false;
-	}
-	string header;
-	if (!getline(edges_file, header)) {//把edges_file第一行内容拿出，放入header里，当前文件指针位于第二行开头
-		cout << "首行信息读取失败" << endl;
-		return false;
-	}
-	remove_trailing_carriage_return(header);
-	if (header.substr(0, 3) == "\xEF\xBB\xBF")
-		header.erase(0, 3);//UTF8 BOM格式标识符是EF、BB、BF，如果是BOM格式去除前缀，非BOM格式的正常CSV则会跳过该if 
+    ifstream edges_file(file_path);
+    if (!edges_file.is_open()) {
+        cout << "边CSV文件无法打开，无法进行后续计算" << endl;
+        return false;
+    }
+    string header;
+    if (!getline(edges_file, header)) {//把edges_file第一行内容拿出，放入header里，当前文件指针位于第二行开头
+        cout << "首行信息读取失败" << endl;
+        return false;
+    }
+    remove_trailing_carriage_return(header);
+    if (header.substr(0, 3) == "\xEF\xBB\xBF")
+        header.erase(0, 3);//UTF8 BOM格式标识符是EF、BB、BF，如果是BOM格式去除前缀，非BOM格式的正常CSV则会跳过该if 
 #if test_csv_lines
-	cout << "首行header为：" << header << endl;
+    cout << "首行header为：" << header << endl;
 #endif
-	if (header != "first_vertex_id,second_vertex_id,time_cost,fare_cost,type,line_id,bike_time_cost") {
-		cout << "该文件首行不是first_vertex_id,second_vertex_id,time_cost,fare_cost,type,line_id,bike_time_cost. 很可能不是边文件，请检查data/edges.csv 内容" << endl;
-		return false;
-	}
+    if (header != "first_vertex_id,second_vertex_id,time_cost,fare_cost,type,line_id,bike_time_cost") {
+        cout << "该文件首行不是first_vertex_id,second_vertex_id,time_cost,fare_cost,type,line_id,bike_time_cost. 很可能不是边文件，请检查data/edges.csv 内容" << endl;
+        return false;
+    }
 
-	int current_line_number = 1;//记录为
-	string data_line;
-	while (getline(edges_file, data_line)) {
-		remove_trailing_carriage_return(data_line);
+    int current_line_number = 1;//记录为
+    string data_line;
+    while (getline(edges_file, data_line)) {
+        remove_trailing_carriage_return(data_line);
 
 #if test_csv_lines
-		cout << "边数据为：" << data_line << endl;
+        cout << "边数据为：" << data_line << endl;
 #endif
 
-		string first_vertex_id_text;
-		string second_vertex_id_text;
-		string time_cost_text;
-		string fare_cost_text;
-		string edge_type_text;
-		string line_id_text;
-		string bike_time_cost_text;
-		stringstream edges_stream(data_line);
-		if (!getline(edges_stream, first_vertex_id_text, ',') ||
-			!getline(edges_stream, second_vertex_id_text, ',') ||
-			!getline(edges_stream, time_cost_text, ',') ||
-			!getline(edges_stream, fare_cost_text, ',') ||
-			!getline(edges_stream, edge_type_text, ',') ||
-			!getline(edges_stream, line_id_text, ',') ||
-			!getline(edges_stream, bike_time_cost_text, ',')) {//逐个获取七个字段，每次遇到,就停止
-			cout << "边数据字段不完整" << endl;
-			return false;
-		}
-		int first_vertex_id;
-		int second_vertex_id;
-		int time_cost;
-		double fare_cost;
-		int line_id;
-		int bike_time_cost;
-		try {
-			first_vertex_id = stoi(first_vertex_id_text);
-			second_vertex_id = stoi(second_vertex_id_text);
-			time_cost = stoi(time_cost_text);
-			fare_cost = stod(fare_cost_text);//注意，fare_cost是double型所以用stod
-			line_id = stoi(line_id_text);
-			bike_time_cost = stoi(bike_time_cost_text);
-		}
-		catch (const invalid_argument&) {
-			cout << "第" << current_line_number << "条边" << "某个数字字段非数字类型" << endl;
-			return false;
-		}
-		catch (const out_of_range&) {
-			cout << "第" << current_line_number << "条边" << "某个数字字段超过合法范围" << endl;
-			return false;
-		}
-		edge_type parsed_edge_type;
-		if (edge_type_text == "METRO")
-			parsed_edge_type = edge_type::METRO;
-		else if (edge_type_text == "BUS")
-			parsed_edge_type = edge_type::BUS;
-		else if (edge_type_text == "TRANSFER")
-			parsed_edge_type = edge_type::TRANSFER;
-		else {//一般不会执行到这里
-			cout << "第" << current_line_number << "条边" << "边类型既不是地铁也不是公交也不是换乘，非法" << endl;
-			return false;
-		}
+        string first_vertex_id_text;
+        string second_vertex_id_text;
+        string time_cost_text;
+        string fare_cost_text;
+        string edge_type_text;
+        string line_id_text;
+        string bike_time_cost_text;
+        stringstream edges_stream(data_line);
+        if (!getline(edges_stream, first_vertex_id_text, ',') ||
+            !getline(edges_stream, second_vertex_id_text, ',') ||
+            !getline(edges_stream, time_cost_text, ',') ||
+            !getline(edges_stream, fare_cost_text, ',') ||
+            !getline(edges_stream, edge_type_text, ',') ||
+            !getline(edges_stream, line_id_text, ',') ||
+            !getline(edges_stream, bike_time_cost_text, ',')) {//逐个获取七个字段，每次遇到,就停止
+            cout << "边数据字段不完整" << endl;
+            return false;
+        }
+        int first_vertex_id;
+        int second_vertex_id;
+        int time_cost;
+        double fare_cost;
+        int line_id;
+        int bike_time_cost;
+        try {
+            first_vertex_id = stoi(first_vertex_id_text);
+            second_vertex_id = stoi(second_vertex_id_text);
+            time_cost = stoi(time_cost_text);
+            fare_cost = stod(fare_cost_text);//注意，fare_cost是double型所以用stod
+            line_id = stoi(line_id_text);
+            bike_time_cost = stoi(bike_time_cost_text);
+        }
+        catch (const invalid_argument&) {
+            cout << "第" << current_line_number << "条边" << "某个数字字段非数字类型" << endl;
+            return false;
+        }
+        catch (const out_of_range&) {
+            cout << "第" << current_line_number << "条边" << "某个数字字段超过合法范围" << endl;
+            return false;
+        }
+        edge_type parsed_edge_type;
+        if (edge_type_text == "METRO")
+            parsed_edge_type = edge_type::METRO;
+        else if (edge_type_text == "BUS")
+            parsed_edge_type = edge_type::BUS;
+        else if (edge_type_text == "TRANSFER")
+            parsed_edge_type = edge_type::TRANSFER;
+        else {//一般不会执行到这里
+            cout << "第" << current_line_number << "条边" << "边类型既不是地铁也不是公交也不是换乘，非法" << endl;
+            return false;
+        }
 
-		if (!is_valid_vertex_id(first_vertex_id, vertex_number) ||
-			!is_valid_vertex_id(second_vertex_id, vertex_number)) {//顶点编号范围
-			cout << "第" << current_line_number << "条边" << "站点编号范围不合法" << endl;
-			return false;
-		}
-		if (first_vertex_id == second_vertex_id) {//检查起点终点编号
-			cout << "第" << current_line_number << "条边" << "站点起点终点编号相同，形成错误自环" << endl;
-			return false;
-		}
-		if (time_cost < 0) {//注意，0也不行，因为要处理公交站问题
-			cout << "第" << current_line_number << "条边" << "时间小于等于0，数据错误的权重不能用Dijkstra" << endl;
-			return false;
-		}
-		if (fare_cost < 0) {
-			cout << "第" << current_line_number << "条边" << "费用小于0，数据错误的权重不能用Dijkstra" << endl;
-			return false;
-		} 
-		if (parsed_edge_type == edge_type::METRO || parsed_edge_type == edge_type::BUS) {
-			if (line_id < 0 || line_id >= line_number) {
-				cout << "第" << current_line_number << "条边" << "公交/地铁线路的编号范围错误" << endl;
-				return false;
-			}
-			if (lines[line_id].type!= parsed_edge_type) {
-				cout << "第" << current_line_number << "条边" << "线路类型和CSV类型不匹配" << endl;
-				return false;
-			}
-			if (bike_time_cost != -1) {
-				cout << "第" << current_line_number << "条边" << "线路类型为地铁或公交，但骑行边非-1，是否输入了错误的类型？" << endl;
-				return false;
-			}
-			switch (parsed_edge_type) {
-				case edge_type::METRO:
-					if (vertices[first_vertex_id].type != station_type::METRO || vertices[second_vertex_id].type != station_type::METRO) {
-						cout << "第" << current_line_number << "条地铁边的两端不全是地铁站，类型错误" << endl;
-						return false;
-					}
-					break;
-				case edge_type::BUS:
-					if (vertices[first_vertex_id].type != station_type::BUS || vertices[second_vertex_id].type != station_type::BUS) {
-						cout << "第" << current_line_number << "条公交边的两端不全是公交站，类型错误" << endl;
-						return false;
-					}
-					break;
-			}
-		}
-		else if (parsed_edge_type == edge_type::TRANSFER) {
-			if (line_id != -1) {
-				cout << "第" << current_line_number << "条边" << "线路类型为换乘，但线路编号非-1，是否输入了错误的类型？" << endl;
-				return false;
-			}
-			if (fare_cost != 0) {
-				cout << "第" << current_line_number << "条边" << "线路类型为换乘，但费用不为0，是否输入了错误的类型？" << endl;
-				return false;
-			}
-			if (bike_time_cost != -1 && (bike_time_cost <= 0 || bike_time_cost >= time_cost)){
-				cout << "第" << current_line_number << "条边" << "是换乘边，允许骑行，但是骑行耗时不合法(非正值或并未比步行节省时间)" << endl;
-				return false;
-			}
-		}
-		
-			
-		
-		
+        if (!is_valid_vertex_id(first_vertex_id, vertex_number) ||
+            !is_valid_vertex_id(second_vertex_id, vertex_number)) {//顶点编号范围
+            cout << "第" << current_line_number << "条边" << "站点编号范围不合法" << endl;
+            return false;
+        }
+        if (first_vertex_id == second_vertex_id) {//检查起点终点编号
+            cout << "第" << current_line_number << "条边" << "站点起点终点编号相同，形成错误自环" << endl;
+            return false;
+        }
+        if (time_cost < 0) {//注意，0也不行，因为要处理公交站问题
+            cout << "第" << current_line_number << "条边" << "时间小于等于0，数据错误的权重不能用Dijkstra" << endl;
+            return false;
+        }
+        if (fare_cost < 0) {
+            cout << "第" << current_line_number << "条边" << "费用小于0，数据错误的权重不能用Dijkstra" << endl;
+            return false;
+        }
+        if (parsed_edge_type == edge_type::METRO || parsed_edge_type == edge_type::BUS) {
+            if (line_id < 0 || line_id >= line_number) {
+                cout << "第" << current_line_number << "条边" << "公交/地铁线路的编号范围错误" << endl;
+                return false;
+            }
+            if (lines[line_id].type != parsed_edge_type) {
+                cout << "第" << current_line_number << "条边" << "线路类型和CSV类型不匹配" << endl;
+                return false;
+            }
+            if (bike_time_cost != -1) {
+                cout << "第" << current_line_number << "条边" << "线路类型为地铁或公交，但骑行边非-1，是否输入了错误的类型？" << endl;
+                return false;
+            }
+            switch (parsed_edge_type) {
+                case edge_type::METRO:
+                    if (vertices[first_vertex_id].type != station_type::METRO || vertices[second_vertex_id].type != station_type::METRO) {
+                        cout << "第" << current_line_number << "条地铁边的两端不全是地铁站，类型错误" << endl;
+                        return false;
+                    }
+                    break;
+                case edge_type::BUS:
+                    if (vertices[first_vertex_id].type != station_type::BUS || vertices[second_vertex_id].type != station_type::BUS) {
+                        cout << "第" << current_line_number << "条公交边的两端不全是公交站，类型错误" << endl;
+                        return false;
+                    }
+                    break;
+            }
+        }
+        else if (parsed_edge_type == edge_type::TRANSFER) {
+            if (line_id != -1) {
+                cout << "第" << current_line_number << "条边" << "线路类型为换乘，但线路编号非-1，是否输入了错误的类型？" << endl;
+                return false;
+            }
+            if (fare_cost != 0) {
+                cout << "第" << current_line_number << "条边" << "线路类型为换乘，但费用不为0，是否输入了错误的类型？" << endl;
+                return false;
+            }
+            if (bike_time_cost != -1 && (bike_time_cost <= 0 || bike_time_cost >= time_cost)) {
+                cout << "第" << current_line_number << "条边" << "是换乘边，允许骑行，但是骑行耗时不合法(非正值或并未比步行节省时间)" << endl;
+                return false;
+            }
+        }
 
-	
+
+
+
+
+
 
 #if test_csv_lines
-		cout << "边的一端顶点编号为：" << first_vertex_id << endl;
-		cout << "边的另一端顶点编号为：" << second_vertex_id << endl;
-		cout << "边的时间花费为：" << time_cost << endl;
-		cout << "边的费用为：" << fare_cost << endl;
-		cout << "边的类型为：" << edge_type_text << endl;
-		cout << "线路编号为：" << line_id << endl;
-		cout << "边骑行时长为：" << bike_time_cost << endl;
+        cout << "边的一端顶点编号为：" << first_vertex_id << endl;
+        cout << "边的另一端顶点编号为：" << second_vertex_id << endl;
+        cout << "边的时间花费为：" << time_cost << endl;
+        cout << "边的费用为：" << fare_cost << endl;
+        cout << "边的类型为：" << edge_type_text << endl;
+        cout << "线路编号为：" << line_id << endl;
+        cout << "边骑行时长为：" << bike_time_cost << endl;
 #endif	
 
 
 
-		add_undirected_edge(vertices[first_vertex_id], vertices[second_vertex_id],
-			time_cost, fare_cost, parsed_edge_type, line_id, bike_time_cost);
-		current_line_number++;
-	}
+        add_undirected_edge(vertices[first_vertex_id], vertices[second_vertex_id],
+            time_cost, fare_cost, parsed_edge_type, line_id, bike_time_cost);
+        current_line_number++;
+    }
 
-	if (current_line_number == 1) {//依然停留在1，表示只有表头没有具体边
-		cout << "边CSV中没有有效边数据" << endl;
-		return false;
-	}
-	edges_file.close();//关文件
+    if (current_line_number == 1) {//依然停留在1，表示只有表头没有具体边
+        cout << "边CSV中没有有效边数据" << endl;
+        return false;
+    }
+    edges_file.close();//关文件
 
-	return true;
+    return true;
 }
 
 /***************************************************************************
@@ -923,111 +928,111 @@ bool load_edges(const string& file_path, vertex vertices[], int vertex_number, c
    int k：时间+k×费用里的策略参数k
    double distance[]：完成dijkstra流程时维护的最短路径长数组
    int previous_vertex[]：完成dijkstra流程时维护的前驱数组顶点，记录路径
-	const edge_node* previous_edge[]：保存最短路径中到达各顶点实际采用的边
+    const edge_node* previous_edge[]：保存最短路径中到达各顶点实际采用的边
    bool allow_bike = false：是否允许骑车，默认不允许
   返 回 值：参数不在正确范围内或堆操作失败返回false，成功返回true
   说    明：distance和previous_vertex是结果数组,为需要修改的核心表格，函数内部会进行修改
-	由于同一套顶点允许多次入堆，不采用visited数组写法bool visited[max_vertices] = {false}，
-	而是判断堆里的distance元素是否已更新为distance结果数组里的最小值
+    由于同一套顶点允许多次入堆，不采用visited数组写法bool visited[max_vertices] = {false}，
+    而是判断堆里的distance元素是否已更新为distance结果数组里的最小值
 ***************************************************************************/
 bool dijkstra(vertex vertices[], int vertex_number, int start_vertex, int k, double distance[], int previous_vertex[],
-	const edge_node* previous_edge[], bool allow_bike = false)
+    const edge_node* previous_edge[], bool allow_bike = false)
 {
-	//范围检查
-	if (vertex_number <= 0 || vertex_number > max_vertices)
-		return false;//顶点数应该在1..max_vertices之间
-	if (!is_valid_vertex_id(start_vertex, vertex_number))
-		return false;//开始下标应该在0..vertex_number-1之间
-	if (k < 0)
-		return false;//Dijkstra对负权图无效
-	//初始化值
-	for (int i = 0; i < vertex_number; i++)
-		distance[i] = std::numeric_limits<double>::infinity();
-	distance[start_vertex] = 0;//从起点到起点距离显然为0，起点到其余为inf
-	for (int i = 0; i < vertex_number; i++) {
-		previous_vertex[i] = -1;//初始化为-1，约定-1代表当前还没有前驱节点
-		previous_edge[i] = nullptr;
-	}
-		
+    //范围检查
+    if (vertex_number <= 0 || vertex_number > max_vertices)
+        return false;//顶点数应该在1..max_vertices之间
+    if (!is_valid_vertex_id(start_vertex, vertex_number))
+        return false;//开始下标应该在0..vertex_number-1之间
+    if (k < 0)
+        return false;//Dijkstra对负权图无效
+    //初始化值
+    for (int i = 0; i < vertex_number; i++)
+        distance[i] = std::numeric_limits<double>::infinity();
+    distance[start_vertex] = 0;//从起点到起点距离显然为0，起点到其余为inf
+    for (int i = 0; i < vertex_number; i++) {
+        previous_vertex[i] = -1;//初始化为-1，约定-1代表当前还没有前驱节点
+        previous_edge[i] = nullptr;
+    }
 
-	min_heap heap;
-	if (!initialize_heap(heap, vertex_number))
-		return false;
-	if (!insert_heap(heap, start_vertex, distance[start_vertex])) {
-		release_heap(heap);//插入失败，则释放
-		return false;
-	}
-	while (!is_heap_empty(heap)) {
-		heap_node current_node;
-		if (!extract_min(heap, current_node)) {
-			release_heap(heap);//拿出堆顶最小元素失败，则释放
-			return false;
-		}
-		int current_vertex = current_node.vertex_id;
-		if (current_node.distance > distance[current_vertex])
-			continue;//如果弹出的堆顶距离比当前记录的距离大，说明这个顶点已经被更新过了，直接跳过旧堆，避免重复处理
 
-		edge_node* current_edge = vertices[current_vertex].first_edge;//当前边指针指向当前顶点邻接表的第一条边
-		while (current_edge) {//只要当前顶点还有邻接边，就一直遍历
-			int next_vertex = current_edge->to;//当前邻接边的目标顶点编号
+    min_heap heap;
+    if (!initialize_heap(heap, vertex_number))
+        return false;
+    if (!insert_heap(heap, start_vertex, distance[start_vertex])) {
+        release_heap(heap);//插入失败，则释放
+        return false;
+    }
+    while (!is_heap_empty(heap)) {
+        heap_node current_node;
+        if (!extract_min(heap, current_node)) {
+            release_heap(heap);//拿出堆顶最小元素失败，则释放
+            return false;
+        }
+        int current_vertex = current_node.vertex_id;
+        if (current_node.distance > distance[current_vertex])
+            continue;//如果弹出的堆顶距离比当前记录的距离大，说明这个顶点已经被更新过了，直接跳过旧堆，避免重复处理
 
-			double candidate_distance = distance[current_vertex] + calculate_weight(*current_edge, k, allow_bike);//计算当前顶点到邻接顶点的候选距离
-			if (candidate_distance < distance[next_vertex]) {//如果候选距离比原来的距离小，就更新
-				distance[next_vertex] = candidate_distance;//更新distance数组记录的距离
-				previous_vertex[next_vertex] = current_vertex;//更新前驱数组记录的前驱顶点
-				previous_edge[next_vertex] = current_edge;
-				if (!insert_heap(heap, next_vertex, distance[next_vertex])) {//把邻接顶点加入堆中，等待下一轮弹出
-					release_heap(heap);//插入失败，则释放
-					return false;
-				}
-			}
+        edge_node* current_edge = vertices[current_vertex].first_edge;//当前边指针指向当前顶点邻接表的第一条边
+        while (current_edge) {//只要当前顶点还有邻接边，就一直遍历
+            int next_vertex = current_edge->to;//当前邻接边的目标顶点编号
 
-			current_edge = current_edge->next;
-		}
-	}
-	release_heap(heap);
+            double candidate_distance = distance[current_vertex] + calculate_weight(*current_edge, k, allow_bike);//计算当前顶点到邻接顶点的候选距离
+            if (candidate_distance < distance[next_vertex]) {//如果候选距离比原来的距离小，就更新
+                distance[next_vertex] = candidate_distance;//更新distance数组记录的距离
+                previous_vertex[next_vertex] = current_vertex;//更新前驱数组记录的前驱顶点
+                previous_edge[next_vertex] = current_edge;
+                if (!insert_heap(heap, next_vertex, distance[next_vertex])) {//把邻接顶点加入堆中，等待下一轮弹出
+                    release_heap(heap);//插入失败，则释放
+                    return false;
+                }
+            }
 
-	return true;
+            current_edge = current_edge->next;
+        }
+    }
+    release_heap(heap);
+
+    return true;
 }
 
 /***************************************************************************
   函数名称：build_paths
   功    能：建立paths数组，存储最短路径整个过程经过哪些顶点
   输入参数：const int previous_vertex[]：前驱数组
-	int vertex_number：总顶点数，用于范围检查和防止异常循环
-	int start_vertex：起点顶点序号；
-	int end_vertex：终点顶点序号；
-	int path[]：输出路径数组；
-	int& path_vertex_number：路径总长度，确定数组边界
+    int vertex_number：总顶点数，用于范围检查和防止异常循环
+    int start_vertex：起点顶点序号；
+    int end_vertex：终点顶点序号；
+    int path[]：输出路径数组；
+    int& path_vertex_number：路径总长度，确定数组边界
   返 回 值：false表示失败，true表示成功
   说    明：path[]为反向数组
 ***************************************************************************/
 bool build_paths(const int previous_vertex[], int vertex_number, int start_vertex, int end_vertex, int path[], int& path_vertex_number)
 {
-	//范围检查
-	if (vertex_number <= 0 || vertex_number > max_vertices)
-		return false;//顶点数应该在1..max_vertices之间
-	if (!(is_valid_vertex_id(start_vertex, vertex_number) && is_valid_vertex_id(end_vertex, vertex_number)))
-		return false;//起点、终点下标都应该在0..vertex_number-1之间
+    //范围检查
+    if (vertex_number <= 0 || vertex_number > max_vertices)
+        return false;//顶点数应该在1..max_vertices之间
+    if (!(is_valid_vertex_id(start_vertex, vertex_number) && is_valid_vertex_id(end_vertex, vertex_number)))
+        return false;//起点、终点下标都应该在0..vertex_number-1之间
 
-	path_vertex_number = 0;//不依赖传入的值，重置为0，因为用的引用所以无法设置函数默认参数
-	int current_vertex = end_vertex;
-	while (path_vertex_number < vertex_number) {//若大于等于vertex_number根据鸽巢原理一定有重复顶点出现，则有环
-		if (!is_valid_vertex_id(current_vertex, vertex_number)) {//不可达，正常情况下这种情况current_vertex为-1
-			path_vertex_number = 0;
-			return false;
-		}
-		path[path_vertex_number] = current_vertex;
-		path_vertex_number++;
-		if (current_vertex == start_vertex)
-			return true;//找到起点则返回true，注意此处等号左边不能用path[path_vertex_number]，因为path_vertex_number已经自增
+    path_vertex_number = 0;//不依赖传入的值，重置为0，因为用的引用所以无法设置函数默认参数
+    int current_vertex = end_vertex;
+    while (path_vertex_number < vertex_number) {//若大于等于vertex_number根据鸽巢原理一定有重复顶点出现，则有环
+        if (!is_valid_vertex_id(current_vertex, vertex_number)) {//不可达，正常情况下这种情况current_vertex为-1
+            path_vertex_number = 0;
+            return false;
+        }
+        path[path_vertex_number] = current_vertex;
+        path_vertex_number++;
+        if (current_vertex == start_vertex)
+            return true;//找到起点则返回true，注意此处等号左边不能用path[path_vertex_number]，因为path_vertex_number已经自增
 
-		current_vertex = previous_vertex[current_vertex];//更新current_vertex为它的前驱节点
+        current_vertex = previous_vertex[current_vertex];//更新current_vertex为它的前驱节点
 
-	}
-	//不满足path_vertex_number<vertex_number，说明不正常
-	path_vertex_number = 0;
-	return false;
+    }
+    //不满足path_vertex_number<vertex_number，说明不正常
+    path_vertex_number = 0;
+    return false;
 }
 
 /***************************************************************************
@@ -1039,13 +1044,13 @@ bool build_paths(const int previous_vertex[], int vertex_number, int start_verte
 ***************************************************************************/
 const edge_node* find_directed_edge(const vertex& from_vertex, int to)
 {
-	const edge_node* current_edge = from_vertex.first_edge;
-	while (current_edge) {
-		if (current_edge->to == to)
-			return current_edge;
-		current_edge = current_edge->next;
-	}
-	return nullptr;//遍历后没找到这条边
+    const edge_node* current_edge = from_vertex.first_edge;
+    while (current_edge) {
+        if (current_edge->to == to)
+            return current_edge;
+        current_edge = current_edge->next;
+    }
+    return nullptr;//遍历后没找到这条边
 }
 
 /***************************************************************************
@@ -1062,51 +1067,51 @@ const edge_node* find_directed_edge(const vertex& from_vertex, int to)
   到达path[i-1]所实际采用的边就是previous_edge[path[i-1]]
 ***************************************************************************/
 bool calculate_path_statistics(const int path[],
-	int path_vertex_number,
-	const edge_node* previous_edge[],
-	int& total_time_cost,
-	double& total_fare_cost,
-	bool allow_bike = false)
+    int path_vertex_number,
+    const edge_node* previous_edge[],
+    int& total_time_cost,
+    double& total_fare_cost,
+    bool allow_bike = false)
 {
-	total_time_cost = 0;
-	total_fare_cost = 0;
+    total_time_cost = 0;
+    total_fare_cost = 0;
 
-	for (int i = path_vertex_number - 1; i > 0; i--) {
-		int to_vertex = path[i - 1];
-		const edge_node* current_edge = previous_edge[to_vertex];
-		if (!current_edge)
-			return false;
-		total_time_cost +=
-			get_effective_time_cost(*current_edge, allow_bike);
-		total_fare_cost += current_edge->fare_cost;
-	}
+    for (int i = path_vertex_number - 1; i > 0; i--) {
+        int to_vertex = path[i - 1];
+        const edge_node* current_edge = previous_edge[to_vertex];
+        if (!current_edge)
+            return false;
+        total_time_cost +=
+            get_effective_time_cost(*current_edge, allow_bike);
+        total_fare_cost += current_edge->fare_cost;
+    }
 
-	return true;
+    return true;
 }
 
 /***************************************************************************
   函数名称：calculate_arrival_time
   功    能：根据开始时间和路程时间计算到达时间
   输入参数：int start_hour：出发小时（0-23）
-	int start_minute：出发分钟（0-59）
-	int total_minutes：路线总分钟数（>=0）
-	int& arrival_hour：到达小时
-	int& arrival_minute：到达分钟
-	int& days_passed：跨过的天数
+    int start_minute：出发分钟（0-59）
+    int total_minutes：路线总分钟数（>=0）
+    int& arrival_hour：到达小时
+    int& arrival_minute：到达分钟
+    int& days_passed：跨过的天数
   返 回 值：参数符合范围为true，不符合范围则为false
   说    明：后三个参数为输出参数，故使用引用
 ***************************************************************************/
 bool calculate_arrival_time(int start_hour, int start_minute, int total_minutes,
-	int& arrival_hour, int& arrival_minute, int& days_passed)
+    int& arrival_hour, int& arrival_minute, int& days_passed)
 {
-	if (start_hour < 0 || start_hour>23 || start_minute < 0 || start_minute>59 || total_minutes < 0)
-		return false;
-	int total_arrival_minutes = start_hour * 60 + start_minute + total_minutes;
-	days_passed = total_arrival_minutes / 1440;
-	int remain_minutes_in_one_day = total_arrival_minutes % 1440;
-	arrival_hour = remain_minutes_in_one_day / 60;
-	arrival_minute = remain_minutes_in_one_day % 60;
-	return true;
+    if (start_hour < 0 || start_hour>23 || start_minute < 0 || start_minute>59 || total_minutes < 0)
+        return false;
+    int total_arrival_minutes = start_hour * 60 + start_minute + total_minutes;
+    days_passed = total_arrival_minutes / 1440;
+    int remain_minutes_in_one_day = total_arrival_minutes % 1440;
+    arrival_hour = remain_minutes_in_one_day / 60;
+    arrival_minute = remain_minutes_in_one_day % 60;
+    return true;
 }
 
 /***************************************************************************
@@ -1119,21 +1124,21 @@ bool calculate_arrival_time(int start_hour, int start_minute, int total_minutes,
 ***************************************************************************/
 string get_entity_station_name(const vertex vertices[], int vertex_id)
 {
-	if (vertex_id < 0 || vertex_id >= physical_vertex_number)
-		return "未知站点";
+    if (vertex_id < 0 || vertex_id >= physical_vertex_number)
+        return "未知站点";
 
-	string name = vertices[vertex_id].name;
-	size_t left_bracket = name.rfind("（");
-	size_t line_suffix = string::npos;
+    string name = vertices[vertex_id].name;
+    size_t left_bracket = name.rfind("（");
+    size_t line_suffix = string::npos;
 
-	if (left_bracket != string::npos)
-		line_suffix = name.find("号线）", left_bracket);
+    if (left_bracket != string::npos)
+        line_suffix = name.find("号线）", left_bracket);
 
-	if (left_bracket != string::npos && line_suffix != string::npos
-		&& line_suffix + string("号线）").size() == name.size())
-		name = name.substr(0, left_bracket);
+    if (left_bracket != string::npos && line_suffix != string::npos
+        && line_suffix + string("号线）").size() == name.size())
+        name = name.substr(0, left_bracket);
 
-	return name;
+    return name;
 }
 
 /***************************************************************************
@@ -1146,14 +1151,14 @@ string get_entity_station_name(const vertex vertices[], int vertex_id)
   说    明：用于合并同一地铁换乘站在不同线路上的两个图节点
 ***************************************************************************/
 bool same_entity_station(const vertex vertices[],
-	int first_vertex, int second_vertex)
+    int first_vertex, int second_vertex)
 {
-	if (first_vertex < 0 || first_vertex >= physical_vertex_number
-		|| second_vertex < 0 || second_vertex >= physical_vertex_number)
-		return false;
+    if (first_vertex < 0 || first_vertex >= physical_vertex_number
+        || second_vertex < 0 || second_vertex >= physical_vertex_number)
+        return false;
 
-	return get_entity_station_name(vertices, first_vertex)
-		== get_entity_station_name(vertices, second_vertex);
+    return get_entity_station_name(vertices, first_vertex)
+        == get_entity_station_name(vertices, second_vertex);
 }
 
 /***************************************************************************
@@ -1166,26 +1171,26 @@ bool same_entity_station(const vertex vertices[],
   说    明：前92个节点直接返回自身；虚拟节点根据名称和总览坐标寻找对应物理节点
 ***************************************************************************/
 int map_to_physical_vertex(const vertex vertices[], int vertex_number,
-	int vertex_id)
+    int vertex_id)
 {
-	if (!is_valid_vertex_id(vertex_id, vertex_number))
-		return -1;
+    if (!is_valid_vertex_id(vertex_id, vertex_number))
+        return -1;
 
-	if (vertex_id < physical_vertex_number)
-		return vertex_id;
+    if (vertex_id < physical_vertex_number)
+        return vertex_id;
 
-	int physical_limit = physical_vertex_number;
-	if (vertex_number < physical_limit)
-		physical_limit = vertex_number;
+    int physical_limit = physical_vertex_number;
+    if (vertex_number < physical_limit)
+        physical_limit = vertex_number;
 
-	for (int i = 0; i < physical_limit; i++) {
-		if (vertices[vertex_id].name == vertices[i].name
-			&& vertices[vertex_id].x == vertices[i].x
-			&& vertices[vertex_id].y == vertices[i].y)
-			return i;
-	}
+    for (int i = 0; i < physical_limit; i++) {
+        if (vertices[vertex_id].name == vertices[i].name
+            && vertices[vertex_id].x == vertices[i].x
+            && vertices[vertex_id].y == vertices[i].y)
+            return i;
+    }
 
-	return -1;
+    return -1;
 }
 
 /***************************************************************************
@@ -1204,107 +1209,107 @@ int map_to_physical_vertex(const vertex vertices[], int vertex_number,
   说    明：同type和line_id连续合并；步行和骑行分别合并；公交状态边累计成本但不增加站间数
 ***************************************************************************/
 bool build_route_segments(const vertex vertices[], int vertex_number,
-	const int path[], int path_vertex_number,
-	const edge_node* previous_edge[], bool allow_bike,
-	route_segment segments[], int& segment_number,
-	int& stop_number)
+    const int path[], int path_vertex_number,
+    const edge_node* previous_edge[], bool allow_bike,
+    route_segment segments[], int& segment_number,
+    int& stop_number)
 {
-	segment_number = 0;
-	stop_number = 0;
+    segment_number = 0;
+    stop_number = 0;
 
-	if (path_vertex_number < 2 || path_vertex_number > vertex_number)
-		return false;
+    if (path_vertex_number < 2 || path_vertex_number > vertex_number)
+        return false;
 
-	int entity_path_number = 0;
-	string last_entity_name = "";
+    int entity_path_number = 0;
+    string last_entity_name = "";
 
-	for (int i = path_vertex_number - 1; i >= 0; i--) {
-		int physical_vertex =
-			map_to_physical_vertex(vertices, vertex_number, path[i]);
+    for (int i = path_vertex_number - 1; i >= 0; i--) {
+        int physical_vertex =
+            map_to_physical_vertex(vertices, vertex_number, path[i]);
 
-		if (physical_vertex < 0)
-			return false;
+        if (physical_vertex < 0)
+            return false;
 
-		string entity_name =
-			get_entity_station_name(vertices, physical_vertex);
+        string entity_name =
+            get_entity_station_name(vertices, physical_vertex);
 
-		if (entity_path_number == 0 || entity_name != last_entity_name) {
-			entity_path_number++;
-			last_entity_name = entity_name;
-		}
-	}
+        if (entity_path_number == 0 || entity_name != last_entity_name) {
+            entity_path_number++;
+            last_entity_name = entity_name;
+        }
+    }
 
-	if (entity_path_number > 2)
-		stop_number = entity_path_number - 2;
+    if (entity_path_number > 2)
+        stop_number = entity_path_number - 2;
 
-	for (int i = path_vertex_number - 1; i > 0; i--) {
-		int raw_from_vertex = path[i];
-		int raw_to_vertex = path[i - 1];
-		const edge_node* current_edge = previous_edge[raw_to_vertex];
+    for (int i = path_vertex_number - 1; i > 0; i--) {
+        int raw_from_vertex = path[i];
+        int raw_to_vertex = path[i - 1];
+        const edge_node* current_edge = previous_edge[raw_to_vertex];
 
-		if (!current_edge)
-			return false;
+        if (!current_edge)
+            return false;
 
-		int physical_from_vertex =
-			map_to_physical_vertex(vertices, vertex_number,
-				raw_from_vertex);
-		int physical_to_vertex =
-			map_to_physical_vertex(vertices, vertex_number,
-				raw_to_vertex);
+        int physical_from_vertex =
+            map_to_physical_vertex(vertices, vertex_number,
+                raw_from_vertex);
+        int physical_to_vertex =
+            map_to_physical_vertex(vertices, vertex_number,
+                raw_to_vertex);
 
-		if (physical_from_vertex < 0 || physical_to_vertex < 0)
-			return false;
+        if (physical_from_vertex < 0 || physical_to_vertex < 0)
+            return false;
 
-		int effective_time =
-			get_effective_time_cost(*current_edge, allow_bike);
-		bool use_bike =
-			current_edge->type == edge_type::TRANSFER
-			&& effective_time < current_edge->time_cost;
+        int effective_time =
+            get_effective_time_cost(*current_edge, allow_bike);
+        bool use_bike =
+            current_edge->type == edge_type::TRANSFER
+            && effective_time < current_edge->time_cost;
 
-		bool can_merge = false;
-		if (segment_number > 0) {
-			route_segment& last_segment = segments[segment_number - 1];
+        bool can_merge = false;
+        if (segment_number > 0) {
+            route_segment& last_segment = segments[segment_number - 1];
 
-			can_merge =
-				last_segment.type == current_edge->type
-				&& last_segment.line_id == current_edge->line_id
-				&& last_segment.end_vertex == physical_from_vertex;
+            can_merge =
+                last_segment.type == current_edge->type
+                && last_segment.line_id == current_edge->line_id
+                && last_segment.end_vertex == physical_from_vertex;
 
-			if (current_edge->type == edge_type::TRANSFER
-				&& last_segment.use_bike != use_bike)
-				can_merge = false;
-		}
+            if (current_edge->type == edge_type::TRANSFER
+                && last_segment.use_bike != use_bike)
+                can_merge = false;
+        }
 
-		if (can_merge) {
-			route_segment& last_segment = segments[segment_number - 1];
-			last_segment.end_vertex = physical_to_vertex;
-			last_segment.time_cost += effective_time;
-			last_segment.fare_cost += current_edge->fare_cost;
-			if (!same_entity_station(vertices,
-				physical_from_vertex, physical_to_vertex))
-				last_segment.station_edge_number++;
-		}
-		else {
-			if (segment_number >= max_vertices)
-				return false;
+        if (can_merge) {
+            route_segment& last_segment = segments[segment_number - 1];
+            last_segment.end_vertex = physical_to_vertex;
+            last_segment.time_cost += effective_time;
+            last_segment.fare_cost += current_edge->fare_cost;
+            if (!same_entity_station(vertices,
+                physical_from_vertex, physical_to_vertex))
+                last_segment.station_edge_number++;
+        }
+        else {
+            if (segment_number >= max_vertices)
+                return false;
 
-			route_segment& new_segment = segments[segment_number];
-			new_segment = route_segment{};
-			new_segment.start_vertex = physical_from_vertex;
-			new_segment.end_vertex = physical_to_vertex;
-			new_segment.type = current_edge->type;
-			new_segment.line_id = current_edge->line_id;
-			new_segment.use_bike = use_bike;
-			new_segment.time_cost = effective_time;
-			new_segment.fare_cost = current_edge->fare_cost;
-			if (!same_entity_station(vertices,
-				physical_from_vertex, physical_to_vertex))
-				new_segment.station_edge_number = 1;
-			segment_number++;
-		}
-	}
+            route_segment& new_segment = segments[segment_number];
+            new_segment = route_segment{};
+            new_segment.start_vertex = physical_from_vertex;
+            new_segment.end_vertex = physical_to_vertex;
+            new_segment.type = current_edge->type;
+            new_segment.line_id = current_edge->line_id;
+            new_segment.use_bike = use_bike;
+            new_segment.time_cost = effective_time;
+            new_segment.fare_cost = current_edge->fare_cost;
+            if (!same_entity_station(vertices,
+                physical_from_vertex, physical_to_vertex))
+                new_segment.station_edge_number = 1;
+            segment_number++;
+        }
+    }
 
-	return segment_number > 0;
+    return segment_number > 0;
 }
 
 /***************************************************************************
@@ -1316,8 +1321,8 @@ bool build_route_segments(const vertex vertices[], int vertex_number,
 ***************************************************************************/
 bool is_public_transport_segment(const route_segment& segment)
 {
-	return segment.type == edge_type::METRO
-		|| segment.type == edge_type::BUS;
+    return segment.type == edge_type::METRO
+        || segment.type == edge_type::BUS;
 }
 
 /***************************************************************************
@@ -1329,20 +1334,20 @@ bool is_public_transport_segment(const route_segment& segment)
 ***************************************************************************/
 int get_transfer_count(const ui_state& state)
 {
-	int transfer_count = 0;
-	int previous_public_segment = -1;
+    int transfer_count = 0;
+    int previous_public_segment = -1;
 
-	for (int i = 0; i < state.segment_number; i++) {
-		if (!is_public_transport_segment(state.segments[i]))
-			continue;
+    for (int i = 0; i < state.segment_number; i++) {
+        if (!is_public_transport_segment(state.segments[i]))
+            continue;
 
-		if (previous_public_segment >= 0)
-			transfer_count++;
+        if (previous_public_segment >= 0)
+            transfer_count++;
 
-		previous_public_segment = i;
-	}
+        previous_public_segment = i;
+    }
 
-	return transfer_count;
+    return transfer_count;
 }
 
 /***************************************************************************
@@ -1355,36 +1360,36 @@ int get_transfer_count(const ui_state& state)
 ***************************************************************************/
 string get_transfer_summary(const vertex vertices[], const ui_state& state)
 {
-	string summary;
-	int previous_public_segment = -1;
+    string summary;
+    int previous_public_segment = -1;
 
-	for (int i = 0; i < state.segment_number; i++) {
-		if (!is_public_transport_segment(state.segments[i]))
-			continue;
+    for (int i = 0; i < state.segment_number; i++) {
+        if (!is_public_transport_segment(state.segments[i]))
+            continue;
 
-		if (previous_public_segment >= 0) {
-			int from_vertex =
-				state.segments[previous_public_segment].end_vertex;
-			int to_vertex = state.segments[i].start_vertex;
+        if (previous_public_segment >= 0) {
+            int from_vertex =
+                state.segments[previous_public_segment].end_vertex;
+            int to_vertex = state.segments[i].start_vertex;
 
-			string from_name =
-				get_entity_station_name(vertices, from_vertex);
-			string to_name =
-				get_entity_station_name(vertices, to_vertex);
+            string from_name =
+                get_entity_station_name(vertices, from_vertex);
+            string to_name =
+                get_entity_station_name(vertices, to_vertex);
 
-			if (!summary.empty())
-				summary += "、";
+            if (!summary.empty())
+                summary += "、";
 
-			if (same_entity_station(vertices, from_vertex, to_vertex))
-				summary += from_name;
-			else
-				summary += from_name + "->" + to_name;
-		}
+            if (same_entity_station(vertices, from_vertex, to_vertex))
+                summary += from_name;
+            else
+                summary += from_name + "->" + to_name;
+        }
 
-		previous_public_segment = i;
-	}
+        previous_public_segment = i;
+    }
 
-	return summary;
+    return summary;
 }
 
 /***************************************************************************
@@ -1444,6 +1449,10 @@ namespace ui_layout
     const int logical_top = 60;
     const int logical_bottom = 610;
 
+
+    // 总览校园枢纽，与校内底图坐标无关。
+    const int campus_logical_x = 175;
+    const int campus_logical_y = 270;
 
     const int jiading_offset_x = 575;
     const int jiading_offset_y = 260;
@@ -1584,12 +1593,20 @@ int scale_total_map_y(int logical_y)
   函数名称：is_jiading_internal_vertex
   功    能：判断物理节点是否属于嘉定校区内部
   输入参数：int vertex_id：物理节点编号
-  返 回 值：56到63号校内节点返回true，否则返回false
-  说    明：总览将校内八个节点收束为校园枢纽，完整名称在底部清单同时展示
+  返 回 值：56到63号中除59外的校内节点返回true，否则返回false
+  说    明：总览将校内节点收束为校园枢纽；59号校外公交站单独显示
 ***************************************************************************/
 bool is_jiading_internal_vertex(int vertex_id)
 {
-    return vertex_id >= 56 && vertex_id <= 63;
+    // 59号是绿苑路曹安公路公交站，不属于校内收束节点。
+    return vertex_id >= 56 && vertex_id <= 63 && vertex_id != 59;
+}
+
+// 嘉定校区—封浜共线走廊的校园端。59号单独显示，
+// 其余校内节点在总览图中仍收束到嘉定校区枢纽。
+bool is_jiading_corridor_terminal(int vertex_id)
+{
+    return vertex_id == 59 || is_jiading_internal_vertex(vertex_id);
 }
 
 /***************************************************************************
@@ -1615,23 +1632,43 @@ screen_point get_total_map_point(const vertex vertices[],
     if (physical_vertex >= 0
         && physical_vertex < physical_vertex_number
         && is_jiading_internal_vertex(physical_vertex)) {
-        logical_x = 150;
-        logical_y = 235;
+        logical_x = ui_layout::campus_logical_x;
+        logical_y = ui_layout::campus_logical_y;
     }
 
-    // 嘉定周边优先保持CSV中的真实相对关系；仅将822整理成封浜至嘉定校区的连续走廊
+    // 总览使用示意坐标：参考用户提供的GCJ-02相对方位，密集站适度展开。
+    // 132路在校园西北侧折返，112路沿校园西南侧向东；公交节点避开11号线。
+    // 封浜公交站—嘉定校区的北安跨、DZ1、822共用312国道/曹安公路同一走廊。
+    // 虚拟节点按同一physical_vertex定位，底图、选线和点击共用这组坐标。
     switch (physical_vertex) {
-        case 74: logical_x = 318; logical_y = 364; break; // 封浜公交站，紧邻封浜地铁站
-        case 75: logical_x = 303; logical_y = 354; break; // 翔江路
-        case 76: logical_x = 288; logical_y = 344; break; // 曹丰路
-        case 77: logical_x = 273; logical_y = 334; break; // 宝园五路
-        case 78: logical_x = 258; logical_y = 324; break; // 宝园七路
-        case 79: logical_x = 243; logical_y = 314; break; // 联西路
-        case 80: logical_x = 228; logical_y = 304; break; // 联群路
-        case 81: logical_x = 213; logical_y = 294; break; // 星塔路
-        case 82: logical_x = 198; logical_y = 284; break; // 许家东街村
-        case 83: logical_x = 183; logical_y = 274; break; // 新黄公路
-        case 84: logical_x = 168; logical_y = 264; break; // 嘉松北路
+        case 29: logical_x = 115; logical_y = 220; break; // 昌吉东路（11号线）
+        case 30: logical_x = 45; logical_y = 279; break; // 上海汽车城（11号线）
+        case 31: logical_x -= 5; break; // 豫园（14号线）：向左靠近10号线豫园
+        case 59: logical_x = ui_layout::campus_logical_x - 5; logical_y = ui_layout::campus_logical_y + 5; break; // 绿苑路曹安公路（保持原绿苑路位置）
+        case 64: logical_x = 118; logical_y = 225; break; // 公交昌吉东路站
+        case 65: logical_x = 102; logical_y = 239; break; // 百安公路双浦路
+        case 66: logical_x = 88; logical_y = 253; break; // 百安公路于塘南路
+        case 67: logical_x = 102; logical_y = 266; break; // 于塘南路望融路
+        case 68: logical_x = 139; logical_y = 270; break; // 昌吉东路安虹北路
+        case 69: logical_x = ui_layout::campus_logical_x + 2; logical_y = ui_layout::campus_logical_y - 4; break; // 昌吉东路绿苑路：仅保留点，紧贴嘉定校区北侧
+        case 70: logical_x = 57; logical_y = 279; break; // 曹安公路安谐路
+        case 71: logical_x = 78; logical_y = 286; break; // 曹安公路于田路
+        case 72: logical_x = 109; logical_y = 292; break; // 曹安公路安虹路
+        case 73: logical_x = 143; logical_y = 294; break; // 曹安公路二十三号桥
+        case 84: logical_x = 196; logical_y = 279; break; // 曹安公路嘉松北路
+        case 83: logical_x = 210; logical_y = 285; break; // 曹安公路新黄公路
+        case 82: logical_x = 231; logical_y = 294; break; // 曹安公路许家东街村
+        case 81: logical_x = 245; logical_y = 300; break; // 曹安公路星塔路
+        case 80: logical_x = 259; logical_y = 306; break; // 曹安公路联群路
+        case 79: logical_x = 273; logical_y = 312; break; // 曹安公路联西路
+        case 78: logical_x = 287; logical_y = 318; break; // 曹安公路宝园七路
+        case 77: logical_x = 308; logical_y = 327; break; // 曹安公路宝园五路
+        case 76: logical_x = 322; logical_y = 333; break; // 曹安公路曹丰路
+        case 75: logical_x = 343; logical_y = 342; break; // 曹安公路翔江路
+        case 74: logical_x = 371; logical_y = 354; break; // 封浜公交站
+        case 47: logical_x = 375; logical_y = 349; break; // 封浜（14号线）
+        case 46: logical_x = 401; logical_y = 355; break; // 乐秀路（14号线）
+        case 45: logical_x = 429; logical_y = 362; break; // 临洮路（14号线）
         default: break;
     }
 
@@ -1639,6 +1676,51 @@ screen_point get_total_map_point(const vertex vertices[],
     point.x = scale_total_map_x(logical_x);
     point.y = scale_total_map_y(logical_y);
     return point;
+}
+
+// 一条算法边可共用道路折点；折点只负责显示，不代表新增停站。
+// DZ1、822、北安跨在线路图中共用312国道/曹安公路这一条走廊；
+// 822显示沿途站点，DZ1和北安跨虽然算法上是直达边，绘图仍沿同一组道路点。
+// 132路直接使用重新整理后的站点示意坐标，避免局部折返形成视觉假环。
+int get_total_map_edge_points(const vertex vertices[], int vertex_number,
+    int from, int to, const edge_node& edge, screen_point points[])
+{
+    points[0] = get_total_map_point(vertices, vertex_number, from);
+    points[1] = get_total_map_point(vertices, vertex_number, to);
+    int a = map_to_physical_vertex(vertices, vertex_number, from);
+    int b = map_to_physical_vertex(vertices, vertex_number, to);
+
+    // DZ1(4)和北安跨(6)的嘉定校区—封浜段与822完全共线。
+    if (edge.type == edge_type::BUS
+        && (edge.line_id == 4 || edge.line_id == 6)
+        && ((a == 74 && is_jiading_corridor_terminal(b))
+            || (b == 74 && is_jiading_corridor_terminal(a)))) {
+        int count = 0;
+        if (is_jiading_corridor_terminal(a)) {
+            points[count++] = get_total_map_point(vertices, vertex_number, from);
+            for (int station = 84; station >= 74; --station)
+                points[count++] = get_total_map_point(vertices, vertex_number, station);
+        }
+        else {
+            for (int station = 74; station <= 84; ++station)
+                points[count++] = get_total_map_point(vertices, vertex_number, station);
+            points[count++] = get_total_map_point(vertices, vertex_number, to);
+        }
+        return count;
+    }
+
+    // 上海汽车城短驳车与112路在校园—安谐路段共用曹安公路走廊。
+    if (edge.type == edge_type::BUS && edge.line_id == 9
+        && ((a == 70 && is_jiading_corridor_terminal(b))
+            || (b == 70 && is_jiading_corridor_terminal(a)))) {
+        points[4] = points[1];
+        for (int i = 0; i < 3; ++i)
+            points[i + 1] = get_total_map_point(vertices, vertex_number,
+                a == 70 ? 71 + i : 73 - i);
+        return 5;
+    }
+
+    return 2;
 }
 
 /***************************************************************************
@@ -1697,13 +1779,32 @@ void draw_base_network(const vertex vertices[], int vertex_number)
         while (current_edge) {
             if (i < current_edge->to
                 && current_edge->type != edge_type::TRANSFER) {
-                screen_point from_point = get_total_map_point(vertices, vertex_number, i);
-                screen_point to_point = get_total_map_point(
+                int from_physical = map_to_physical_vertex(vertices, vertex_number, i);
+                int to_physical = map_to_physical_vertex(
                     vertices, vertex_number, current_edge->to);
 
-                if (from_point.x != to_point.x || from_point.y != to_point.y) {
-                    set_network_edge_style(*current_edge);
-                    line(from_point.x, from_point.y, to_point.x, to_point.y);
+                // 嘉定校区—封浜只有一条312国道/曹安公路物理走廊。
+                // 底图由822路(line 5)绘制一次；DZ1(line 4)和北安跨(line 6)
+                // 在这一段不重复落笔，但选中路线时仍会沿同一几何高亮。
+                bool shared_fengbang_corridor_duplicate =
+                    current_edge->type == edge_type::BUS
+                    && (current_edge->line_id == 4 || current_edge->line_id == 6)
+                    && ((from_physical == 74 && is_jiading_corridor_terminal(to_physical))
+                        || (to_physical == 74 && is_jiading_corridor_terminal(from_physical)));
+
+                if (!shared_fengbang_corridor_duplicate) {
+                    screen_point from_point = get_total_map_point(vertices, vertex_number, i);
+                    screen_point to_point = get_total_map_point(
+                        vertices, vertex_number, current_edge->to);
+
+                    if (from_point.x != to_point.x || from_point.y != to_point.y) {
+                        set_network_edge_style(*current_edge);
+                        screen_point points[16];
+                        int count = get_total_map_edge_points(vertices, vertex_number,
+                            i, current_edge->to, *current_edge, points);
+                        for (int p = 1; p < count; ++p)
+                            line(points[p - 1].x, points[p - 1].y, points[p].x, points[p].y);
+                    }
                 }
             }
             current_edge = current_edge->next;
@@ -1745,7 +1846,11 @@ void draw_route_highlight(const vertex vertices[], int vertex_number,
         else
             setlinestyle(PS_SOLID, 10);
 
-        line(from_point.x, from_point.y, to_point.x, to_point.y);
+        screen_point points[16];
+        int count = get_total_map_edge_points(vertices, vertex_number,
+            from_vertex, to_vertex, *route_edge, points);
+        for (int p = 1; p < count; ++p)
+            line(points[p - 1].x, points[p - 1].y, points[p].x, points[p].y);
     }
 
     setlinestyle(PS_SOLID, 1);
@@ -1756,7 +1861,7 @@ void draw_route_highlight(const vertex vertices[], int vertex_number,
   功    能：绘制总览图中的实体站点圆圈
   输入参数：const vertex vertices[]：顶点数组；int vertex_number：顶点数量
   返 回 值：无
-  说    明：同实体换乘站只画一个圆圈，嘉定校内八个节点收束成一个校园枢纽
+  说    明：同实体换乘站只画一个圆圈，嘉定校内节点收束成一个校园枢纽，59号校外公交站单独显示
 ***************************************************************************/
 void draw_total_map_vertices(const vertex vertices[], int vertex_number)
 {
@@ -1781,10 +1886,13 @@ void draw_total_map_vertices(const vertex vertices[], int vertex_number)
             }
         }
 
-        if (already_drawn)
+        // 14号线豫园(31)在总览图中与10号线豫园略微错开，
+        // 因此即使实体站名相同，也需要单独补画一个站点圆圈。
+        if (already_drawn && i != 31)
             continue;
 
-        drawn_names[drawn_name_number++] = entity_name;
+        if (!already_drawn)
+            drawn_names[drawn_name_number++] = entity_name;
         screen_point point = get_total_map_point(vertices, vertex_number, i);
 
         setfillcolor(RGB(255, 255, 255));
@@ -1797,8 +1905,8 @@ void draw_total_map_vertices(const vertex vertices[], int vertex_number)
     }
 
     screen_point campus_point;
-    campus_point.x = scale_total_map_x(150);
-    campus_point.y = scale_total_map_y(235);
+    campus_point.x = scale_total_map_x(ui_layout::campus_logical_x);
+    campus_point.y = scale_total_map_y(ui_layout::campus_logical_y);
     setfillcolor(RGB(255, 255, 255));
     setlinecolor(RGB(216, 119, 39));
     fillcircle(campus_point.x, campus_point.y, 10);
@@ -1814,6 +1922,13 @@ void draw_total_map_vertices(const vertex vertices[], int vertex_number)
 string get_map_display_name(const vertex vertices[], int vertex_id)
 {
     string name = get_entity_station_name(vertices, vertex_id);
+
+    // 59号“绿苑路曹安公路”保留完整道路名；69号在总览图只保留站点圆，不显示标签。
+    if (vertex_id == 59)
+        return "绿苑路曹安公路";
+    // 822沿线总览采用短名，避免“许家东街村”在斜线密集区占用过多横向空间。
+    if (vertex_id == 82)
+        return "许家村";
 
     const string road_prefixes[] = {
         "曹安公路", "百安公路", "昌吉东路"
@@ -1868,7 +1983,7 @@ station_label_text build_station_label_text(const string& text, int max_width)
     while (position < text.size()) {
         unsigned char first_byte = static_cast<unsigned char>(text[position]);
         size_t char_length =
-            (first_byte >= 0xA1 && position + 1 < text.size()) ? 2 : 1;
+            (first_byte >= 0x81 && first_byte <= 0xFE && position + 1 < text.size()) ? 2 : 1;
         string one_character = text.substr(position, char_length);
 
         if (!use_second_line) {
@@ -1901,12 +2016,12 @@ station_label_text build_station_label_text(const string& text, int max_width)
   功    能：计算两个站名矩形留出安全间距后的重叠面积
   输入参数：两个station_label_rectangle
   返 回 值：重叠面积
-  说    明：标签之间预留2像素空隙，避免文字视觉上粘成一团
+  说    明：标签各外扩3像素，文字之间及高亮边框之间均保留间隙
 ***************************************************************************/
 int get_label_overlap_area(const station_label_rectangle& first,
     const station_label_rectangle& second)
 {
-    const int safe_gap = 6;
+    const int safe_gap = 3;
     int overlap_left = (first.left - safe_gap) > (second.left - safe_gap)
         ? (first.left - safe_gap) : (second.left - safe_gap);
     int overlap_top = (first.top - safe_gap) > (second.top - safe_gap)
@@ -2035,7 +2150,7 @@ bool does_segment_intersect_label_side(
     if (((first_cross > 0 && second_cross < 0)
         || (first_cross < 0 && second_cross > 0))
         && ((third_cross > 0 && fourth_cross < 0)
-        || (third_cross < 0 && fourth_cross > 0)))
+            || (third_cross < 0 && fourth_cross > 0)))
         return true;
 
     if (first_cross == 0 && is_point_on_label_segment(
@@ -2075,7 +2190,7 @@ bool does_network_edge_cross_label(
     auto inside = [&](const screen_point& point) {
         return point.x >= expanded.left && point.x <= expanded.right
             && point.y >= expanded.top && point.y <= expanded.bottom;
-    };
+        };
     if (inside(first) || inside(second))
         return true;
 
@@ -2090,309 +2205,646 @@ bool does_network_edge_cross_label(
         || does_segment_intersect_label_side(first, second, bottom_left, top_left);
 }
 
-/***************************************************************************
-  函数名称：score_station_label_candidate
-  功    能：给一个站名候选位置评分
-  输入参数：候选矩形、已放置标签、全部节点和当前站点
-  返 回 值：分数越低越适合
-  说    明：越界和文字重叠重罚，距离轻罚，不产生任何标签引导线
-***************************************************************************/
-int score_station_label_candidate(
-    const station_label_rectangle& candidate,
-    const station_label_rectangle placed_rectangles[], int placed_number,
-    const vertex vertices[], int vertex_number, int current_vertex, int distance)
-{
-    if (candidate.left < 4 || candidate.top < 4
-        || candidate.right > ui_layout::map_width - 4
-        || candidate.bottom > ui_layout::network_bottom - 8)
-        return INT_MAX / 4;
-
-    int score = distance * 6;
-
-    for (int i = 0; i < placed_number; i++) {
-        int overlap_area = get_label_overlap_area(candidate, placed_rectangles[i]);
-        if (overlap_area > 0)
-            score += 20000 + overlap_area * 25;
-    }
-
-    int physical_limit = vertex_number;
-    if (physical_limit > physical_vertex_number)
-        physical_limit = physical_vertex_number;
-
-    for (int i = 0; i < physical_limit; i++) {
-        if (i == current_vertex || is_jiading_internal_vertex(i))
-            continue;
-
-        screen_point point = get_total_map_point(vertices, vertex_number, i);
-        if (point.x >= candidate.left - 4 && point.x <= candidate.right + 4
-            && point.y >= candidate.top - 4 && point.y <= candidate.bottom + 4)
-            score += 5000;
-    }
-
-
-    for (int i = 0; i < vertex_number; i++) {
-        const edge_node* current_edge = vertices[i].first_edge;
-        while (current_edge) {
-            if (i < current_edge->to
-                && current_edge->type != edge_type::TRANSFER) {
-                screen_point first_point = get_total_map_point(
-                    vertices, vertex_number, i);
-                screen_point second_point = get_total_map_point(
-                    vertices, vertex_number, current_edge->to);
-
-                if (does_network_edge_cross_label(
-                    first_point, second_point, candidate))
-                    score += 12000;
-            }
-            current_edge = current_edge->next;
-        }
-    }
-
-    return score;
-}
-
-/***************************************************************************
-  函数名称：choose_station_label_rectangle
-  功    能：在站点附近多个候选位置中选择最清楚的位置
-  输入参数：站点坐标、标签宽高、已有标签和全部节点
-  返 回 值：评分最低的候选矩形
-  说    明：最大偏移64像素，优先保持站名与所属站点的视觉邻近关系
-***************************************************************************/
-station_label_rectangle choose_station_label_rectangle(
-    int center_x, int center_y, int label_width, int label_height,
-    const station_label_rectangle placed_rectangles[], int placed_number,
-    const vertex vertices[], int vertex_number, int current_vertex)
-{
-    const int distances[] = { 12, 22, 34, 48, 64 };
-    const int distance_number = sizeof(distances) / sizeof(distances[0]);
-
-    station_label_rectangle best_candidate;
-    int best_score = INT_MAX;
-
-    for (int distance_index = 0; distance_index < distance_number; distance_index++) {
-        for (int direction = 0; direction < 8; direction++) {
-            station_label_rectangle candidate = build_station_label_candidate(
-                center_x, center_y, label_width, label_height,
-                direction, distances[distance_index]);
-
-            int score = score_station_label_candidate(
-                candidate, placed_rectangles, placed_number,
-                vertices, vertex_number, current_vertex, distances[distance_index]);
-
-            if (score < best_score) {
-                best_score = score;
-                best_candidate = candidate;
-            }
-            if (score < 80)
-                return candidate;
-        }
-    }
-
-    return best_candidate;
-}
-
-/***************************************************************************
-  函数名称：draw_station_label
-  功    能：绘制普通总览站名标签
-  输入参数：标签矩形和文字信息
-  返 回 值：无
-  说    明：使用与背景一致的无边框底色压住线路，不画任何引导线
-***************************************************************************/
-void draw_station_label(const station_label_rectangle& rectangle,
-    const station_label_text& label)
-{
-    setfillcolor(RGB(247, 250, 252));
-    solidrectangle(rectangle.left - 2, rectangle.top - 1,
-        rectangle.right + 2, rectangle.bottom + 1);
-
-    set_map_font(20);
-    setbkmode(TRANSPARENT);
-    settextcolor(RGB(28, 36, 48));
-    outtextxy(rectangle.left, rectangle.top, label.first_line.c_str());
-
-    if (label.line_number == 2)
-        outtextxy(rectangle.left, rectangle.top + 22, label.second_line.c_str());
-}
-
-/***************************************************************************
-  函数名称：get_station_label_density
-  功    能：统计站点周围的实体站密度
-  输入参数：顶点数组、顶点数量、当前站点编号
-  返 回 值：附近站点数量
-  说    明：密集站先安排文字，减少后放置标签无处可放的情况
-***************************************************************************/
-int get_station_label_density(const vertex vertices[], int vertex_number, int vertex_id)
-{
+// 总览标签只走这一条流水线：收集实体 -> 测量 -> 生成候选 -> 统一避让 -> 绘制。
+// 坐标只来自get_total_map_point，不再按站号硬编码文字偏移。
+struct map_label_candidate {
+    station_label_rectangle rectangle;
+    int cost = 0;
+    station_label_text text;
+};
+struct map_label_item {
+    int vertex_id = -1; // -1代表收束后的嘉定校区
+    string entity_name;
+    screen_point anchor;
+    station_label_text text;
+    station_label_rectangle rectangle;
+    vector<map_label_candidate> candidates;
     int density = 0;
-    screen_point center = get_total_map_point(vertices, vertex_number, vertex_id);
+};
+struct map_label_edge {
+    screen_point from;
+    screen_point to;
+};
+struct map_label_layout {
+    string key;
+    vector<map_label_item> items;
+    vector<screen_point> nodes;
+    vector<map_label_edge> edges;
+};
+map_label_layout total_map_labels;
 
-    int physical_limit = vertex_number;
-    if (physical_limit > physical_vertex_number)
-        physical_limit = physical_vertex_number;
-
-    for (int i = 0; i < physical_limit; i++) {
-        if (i == vertex_id || is_jiading_internal_vertex(i))
-            continue;
-
-        screen_point other = get_total_map_point(vertices, vertex_number, i);
-        int dx = other.x - center.x;
-        int dy = other.y - center.y;
-        if (dx * dx + dy * dy <= 170 * 170)
-            density++;
-    }
-
-    return density;
-}
-
-/***************************************************************************
-  函数名称：get_manual_station_label_rectangle
-  功    能：为当前总览图中需要精确排版的站点指定固定站名位置
-  输入参数：站点编号、站点屏幕坐标、标签尺寸、输出矩形
-  返 回 值：存在人工位置返回true，否则返回false
-  说    明：只处理当前固定示意图，不改变算法站名和CSV数据
-***************************************************************************/
-bool get_manual_station_label_rectangle(int vertex_id,
-    const screen_point& point, const station_label_text& label,
-    station_label_rectangle& rectangle)
+bool is_map_label_clear(const station_label_rectangle& box,
+    const map_label_layout& layout)
 {
-    int dx = 0;
-    int dy = 0;
-
-    switch (vertex_id) {
-        // 11号线嘉定段
-        case 28: dx = -42;  dy = -34; break; // 上海赛车场
-        case 27: dx = -42;  dy = -34; break; // 嘉定新城
-        case 26: dx = 14;   dy = -24; break; // 马陆
-        case 25: dx = 14;   dy = -24; break; // 陈翔公路
-        case 24: dx = 14;   dy = -24; break; // 南翔
-        case 29: dx = -110; dy = -38; break; // 昌吉东路
-        case 30: dx = -70;  dy = 28;  break; // 上海汽车城
-
-        // 昌吉东路、上海汽车城与嘉定校区之间的两条公交走廊
-        case 64: dx = 18;   dy = -34; break; // 昌吉东路站
-        case 65: dx = -70;  dy = -28; break; // 双浦路
-        case 66: dx = 2;    dy = -40; break; // 于塘南路
-        case 67: dx = 16;   dy = -10; break; // 望融路
-        case 68: dx = -78;  dy = 18;  break; // 安虹北路
-        case 69: dx = 18;   dy = -34; break; // 绿苑路
-        case 70: dx = 20;   dy = -40; break; // 安谐路
-        case 71: dx = 18;   dy = 16;  break; // 于田路
-        case 72: dx = -78;  dy = 18;  break; // 安虹路
-        case 73: dx = -94;  dy = 18;  break; // 二十三号桥
-
-        // 14号线封浜与822换乘区域
-        case 46: dx = -58;  dy = -38; break; // 乐秀路
-        case 47: dx = -68;  dy = 18;  break; // 封浜地铁
-        case 74: dx = 20;   dy = 18;  break; // 封浜公交站
-        case 75: dx = -72;  dy = -34; break; // 翔江路
-
-        // 822其余站点沿线路两侧交错排布
-        case 76: dx = 18;   dy = 12;  break; // 曹丰路
-        case 77: dx = -92;  dy = -32; break; // 宝园五路
-        case 78: dx = 18;   dy = 12;  break; // 宝园七路
-        case 79: dx = -72;  dy = -32; break; // 联西路
-        case 80: dx = 18;   dy = 12;  break; // 联群路
-        case 81: dx = -72;  dy = -32; break; // 星塔路
-        case 82: dx = 18;   dy = 12;  break; // 许家东街村
-        case 83: dx = -94;  dy = -32; break; // 新黄公路
-        case 84: dx = 18;   dy = 12;  break; // 嘉松北路
-        default: return false;
+    if (box.left < 8 || box.top < 8
+        || box.right > ui_layout::map_width - 8
+        || box.bottom > ui_layout::network_bottom - 8)
+        return false;
+    // 连选中圆点、换乘星号一起预留，不能用标签底色擦掉站点。
+    for (size_t i = 0; i < layout.nodes.size(); ++i) {
+        const screen_point& p = layout.nodes[i];
+        if (box.left < p.x + 14 && box.right > p.x - 14
+            && box.top < p.y + 14 && box.bottom > p.y - 24)
+            return false;
     }
-
-    rectangle.left = point.x + dx;
-    rectangle.top = point.y + dy;
-    rectangle.right = rectangle.left + label.width;
-    rectangle.bottom = rectangle.top + label.height;
     return true;
 }
 
-/***************************************************************************
-  函数名称：draw_all_station_names
-  功    能：在总览图永久显示全部非嘉定校内实体站名
-  输入参数：const vertex vertices[]：顶点数组；int vertex_number：顶点数量
-  返 回 值：无
-  说    明：同实体换乘站只写一次，长站名最多两行，全程不绘制引导线
-***************************************************************************/
-void draw_all_station_names(const vertex vertices[], int vertex_number)
+bool is_map_label_free(const station_label_rectangle& box,
+    const map_label_layout& layout, int count, int ignore = -1)
 {
-    int physical_limit = vertex_number;
-    if (physical_limit > physical_vertex_number)
-        physical_limit = physical_vertex_number;
+    for (int i = 0; i < count; ++i) {
+        if (i != ignore && get_label_overlap_area(box, layout.items[i].rectangle) > 0)
+            return false;
+    }
+    return true;
+}
 
-    int label_vertices[physical_vertex_number];
-    int label_number = 0;
-    string used_names[physical_vertex_number];
-    int used_name_number = 0;
+int map_label_position_cost(const station_label_rectangle& box,
+    const map_label_item& item, const map_label_layout& layout)
+{
+    int dx = item.anchor.x < box.left ? box.left - item.anchor.x
+        : (item.anchor.x > box.right ? item.anchor.x - box.right : 0);
+    int dy = item.anchor.y < box.top ? box.top - item.anchor.y
+        : (item.anchor.y > box.bottom ? item.anchor.y - box.bottom : 0);
+    int cost = (dx * dx + dy * dy) * 2;
+    // 在相同距离下尽量正对站点，不让文字沿线路漂到相邻站旁边。
+    cost += abs((box.left + box.right) / 2 - item.anchor.x)
+        + abs((box.top + box.bottom) / 2 - item.anchor.y);
+    // 站名不能比自己的站点更靠近另一站，避免避线后认错归属。
+    const int own_distance = dx * dx + dy * dy;
+    for (size_t i = 0; i < layout.nodes.size(); ++i) {
+        const screen_point& p = layout.nodes[i];
+        if (p.x == item.anchor.x && p.y == item.anchor.y) continue;
+        int nx = p.x < box.left ? box.left - p.x : (p.x > box.right ? p.x - box.right : 0);
+        int ny = p.y < box.top ? box.top - p.y : (p.y > box.bottom ? p.y - box.bottom : 0);
+        int other_distance = nx * nx + ny * ny;
+        if (other_distance < own_distance)
+            cost += 8000 + (own_distance - other_distance) * 4;
+    }
+    for (size_t i = 0; i < layout.edges.size(); ++i) {
+        if (does_network_edge_cross_label(layout.edges[i].from, layout.edges[i].to, box))
+            cost += 3000;
+    }
 
-    for (int i = 0; i < physical_limit; i++) {
-        if (is_jiading_internal_vertex(i))
-            continue;
+    // 总览图局部排版约束：保持中心城区地铁站名朝向整齐。
+    // 32 大世界（14号线）优先放在站点正上方；
+    // 7 天潼路、9 海伦路（10号线）优先放在线路右侧。
+    // 这里只增加很高的候选代价，不破坏统一避让；若首选位置确实碰撞，仍可回退到其它候选。
+    if (item.vertex_id == 32) {
+        int label_center_x = (box.left + box.right) / 2;
+        if (box.bottom > item.anchor.y - 8
+            || abs(label_center_x - item.anchor.x) > 20)
+            cost += 30000;
+    }
+    else if (item.vertex_id == 7 || item.vertex_id == 9) {
+        if (box.left < item.anchor.x + 8)
+            cost += 30000;
+    }
+    else if (item.vertex_id == 88) {
+        // 国康路四平路临近右边界：候选位置整体偏右约10像素。
+        int label_center_x = (box.left + box.right) / 2;
+        cost += abs(label_center_x - (item.anchor.x + 10)) * 35;
+    }
 
-        string entity_name = get_entity_station_name(vertices, i);
-        bool already_used = false;
-        for (int j = 0; j < used_name_number; j++) {
-            if (used_names[j] == entity_name) {
-                already_used = true;
-                break;
+    return cost;
+}
+
+bool is_local_bus_label_clear(const station_label_rectangle& box,
+    const map_label_layout& layout, int max_gap)
+{
+    if (!is_map_label_clear(box, layout)) return false;
+    if (max_gap == 32) {
+        for (size_t i = 0; i < layout.edges.size(); ++i)
+            if (does_network_edge_cross_label(layout.edges[i].from, layout.edges[i].to, box))
+                return false;
+    }
+    return true;
+}
+
+void build_map_label_candidates(map_label_item& item, const map_label_layout& layout)
+{
+    bool keep_close = item.vertex_id == 17
+        || item.vertex_id == 50 || item.vertex_id == 55 || item.vertex_id == 59
+        || item.vertex_id == 83 || item.vertex_id == 85 || item.vertex_id == 86
+        || item.vertex_id == 87 || item.vertex_id == 88;
+    const int max_gap = (item.vertex_id == 29 || item.vertex_id == 30
+        || (item.vertex_id >= 64 && item.vertex_id <= 73) || item.vertex_id < 0) ? 32
+        : (keep_close ? 40 : 64);
+    const int distances[] = { 14, 24, 36, 48 };
+    const int slides[] = { 0, -12, 12, -24, 24, -36, 36 };
+    string full_text = item.text.first_line + item.text.second_line;
+    station_label_text shapes[2] = { item.text, build_station_label_text(full_text, 40) };
+    bool keep_primary_shape = item.vertex_id == 17
+        || item.vertex_id == 32 || item.vertex_id == 50 || item.vertex_id == 55
+        || item.vertex_id == 59 || item.vertex_id == 83 || item.vertex_id == 85
+        || item.vertex_id == 86 || item.vertex_id == 87 || item.vertex_id == 88;
+    int shape_number = keep_primary_shape ? 1 : 2;
+    for (int shape = 0; shape < shape_number; ++shape) {
+        if (shape == 1 && shapes[1].line_number == shapes[0].line_number
+            && shapes[1].width == shapes[0].width) continue;
+        for (int r = 0; r < 4; ++r) {
+            for (int direction = 0; direction < 8; ++direction) {
+                for (int slide = 0; slide < 7; ++slide) {
+                    if (direction >= 4 && slide != 0) continue;
+                    station_label_rectangle box = build_station_label_candidate(
+                        item.anchor.x, item.anchor.y, shapes[shape].width, shapes[shape].height,
+                        direction, distances[r]);
+                    if (direction < 2) {
+                        box.left += slides[slide]; box.right += slides[slide];
+                    }
+                    else if (direction < 4) {
+                        box.top += slides[slide]; box.bottom += slides[slide];
+                    }
+                    if (!is_local_bus_label_clear(box, layout, max_gap)) continue;
+                    // 候选只在本站周围，取消向全地图找空白的远距离兜底。
+                    int dx = item.anchor.x < box.left ? box.left - item.anchor.x
+                        : (item.anchor.x > box.right ? item.anchor.x - box.right : 0);
+                    int dy = item.anchor.y < box.top ? box.top - item.anchor.y
+                        : (item.anchor.y > box.bottom ? item.anchor.y - box.bottom : 0);
+                    if (dx * dx + dy * dy > max_gap * max_gap) continue;
+                    map_label_candidate candidate;
+                    candidate.rectangle = box;
+                    candidate.text = shapes[shape];
+                    candidate.cost = map_label_position_cost(box, item, layout)
+                        + (shape == 1 ? 1800 : 0);
+                    item.candidates.push_back(candidate);
+                }
             }
         }
-        if (already_used)
+    }
+    // 紧邻节点形成狭缝时，补充局部网格位置，仍严格限制64像素。
+    if (item.candidates.size() < 12) {
+        for (int shape = 0; shape < shape_number; ++shape) {
+            for (int y = item.anchor.y - shapes[shape].height - 64; y <= item.anchor.y + 64; y += 4) {
+                for (int x = item.anchor.x - shapes[shape].width - 64; x <= item.anchor.x + 64; x += 4) {
+                    station_label_rectangle box;
+                    box.left = x; box.top = y;
+                    box.right = x + shapes[shape].width; box.bottom = y + shapes[shape].height;
+                    int dx = item.anchor.x < box.left ? box.left - item.anchor.x
+                        : (item.anchor.x > box.right ? item.anchor.x - box.right : 0);
+                    int dy = item.anchor.y < box.top ? box.top - item.anchor.y
+                        : (item.anchor.y > box.bottom ? item.anchor.y - box.bottom : 0);
+                    if (dx * dx + dy * dy > max_gap * max_gap || !is_local_bus_label_clear(box, layout, max_gap)) continue;
+                    map_label_candidate candidate;
+                    candidate.rectangle = box; candidate.text = shapes[shape];
+                    candidate.cost = map_label_position_cost(box, item, layout) + (shape == 1 ? 1800 : 0);
+                    item.candidates.push_back(candidate);
+                }
+            }
+        }
+    }
+    stable_sort(item.candidates.begin(), item.candidates.end(),
+        [](const map_label_candidate& a, const map_label_candidate& b) {
+            return a.cost < b.cost;
+        });
+}
+
+// 最少剩余位置优先：遇到拥挤区域回退调整邻站，不能把后来站名赶到远处。
+bool place_map_labels(map_label_layout& layout, vector<bool>& assigned,
+    int remaining, int& budget)
+{
+    if (remaining == 0) return true;
+    if (--budget <= 0) return false;
+    int selected = -1;
+    size_t fewest = static_cast<size_t>(-1);
+    vector<int> available;
+    for (int i = 0; i < static_cast<int>(layout.items.size()); ++i) {
+        if (assigned[i]) continue;
+        vector<int> free_candidates;
+        const map_label_item& item = layout.items[i];
+        for (int c = 0; c < static_cast<int>(item.candidates.size()); ++c) {
+            bool free = true;
+            for (int j = 0; j < static_cast<int>(layout.items.size()); ++j) {
+                if (assigned[j] && get_label_overlap_area(item.candidates[c].rectangle,
+                    layout.items[j].rectangle) > 0) {
+                    free = false; break;
+                }
+            }
+            if (free) free_candidates.push_back(c);
+        }
+        if (free_candidates.empty()) return false;
+        if (free_candidates.size() < fewest) {
+            selected = i; fewest = free_candidates.size(); available.swap(free_candidates);
+        }
+    }
+    map_label_item& item = layout.items[selected];
+    assigned[selected] = true;
+    for (size_t c = 0; c < available.size() && budget > 0; ++c) {
+        const map_label_candidate& candidate = item.candidates[available[c]];
+        item.rectangle = candidate.rectangle;
+        item.text = candidate.text;
+        if (place_map_labels(layout, assigned, remaining - 1, budget)) return true;
+    }
+    assigned[selected] = false;
+    return false;
+}
+
+// 对少数人工审图后仍显得疏离的标签做“近站微调”。
+// 不追求绝对零压线：站名靠近自己的站点优先于长引线，少量压线只作为次要惩罚。
+int get_total_map_local_overlap_area(const map_label_layout& layout,
+    int item_index, const station_label_rectangle& box)
+{
+    int overlap = 0;
+    for (int i = 0; i < static_cast<int>(layout.items.size()); ++i) {
+        if (i == item_index) continue;
+        overlap += get_label_overlap_area(box, layout.items[i].rectangle);
+    }
+    return overlap;
+}
+
+int get_total_map_local_node_penalty(const map_label_layout& layout,
+    const screen_point& own_anchor, const station_label_rectangle& box)
+{
+    int penalty = 0;
+    for (size_t i = 0; i < layout.nodes.size(); ++i) {
+        const screen_point& p = layout.nodes[i];
+        if (p.x == own_anchor.x && p.y == own_anchor.y) continue;
+        if (box.left < p.x + 10 && box.right > p.x - 10
+            && box.top < p.y + 10 && box.bottom > p.y - 10)
+            penalty += 50000;
+    }
+    return penalty;
+}
+
+int get_total_map_local_edge_penalty(const map_label_layout& layout,
+    const station_label_rectangle& box)
+{
+    int penalty = 0;
+    for (size_t i = 0; i < layout.edges.size(); ++i)
+        if (does_network_edge_cross_label(layout.edges[i].from, layout.edges[i].to, box))
+            penalty += 900;
+    return penalty;
+}
+
+void polish_total_map_label_near(map_label_layout& layout, int vertex_id,
+    const int preferred_directions[], int direction_number, int minimum_distance = 12)
+{
+    int item_index = -1;
+    for (int i = 0; i < static_cast<int>(layout.items.size()); ++i)
+        if (layout.items[i].vertex_id == vertex_id) {
+            item_index = i;
+            break;
+        }
+    if (item_index < 0) return;
+
+    map_label_item& item = layout.items[item_index];
+    const int distances[] = {
+        minimum_distance, minimum_distance + 4, minimum_distance + 8,
+        minimum_distance + 12, minimum_distance + 16
+    };
+    const int slides[] = { 0, -6, 6, -12, 12, -18, 18 };
+    bool found = false;
+    int best_score = INT_MAX;
+    station_label_rectangle best_box = item.rectangle;
+
+    for (int p = 0; p < direction_number; ++p) {
+        int direction = preferred_directions[p];
+        for (int d = 0; d < 5; ++d) {
+            for (int s = 0; s < 7; ++s) {
+                if (direction >= 4 && s != 0) continue;
+                station_label_rectangle box = build_station_label_candidate(
+                    item.anchor.x, item.anchor.y, item.text.width, item.text.height,
+                    direction, distances[d]);
+                if (direction < 2) {
+                    box.left += slides[s];
+                    box.right += slides[s];
+                }
+                else if (direction < 4) {
+                    box.top += slides[s];
+                    box.bottom += slides[s];
+                }
+
+                if (box.left < 8 || box.top < 8
+                    || box.right > ui_layout::map_width - 8
+                    || box.bottom > ui_layout::network_bottom - 8)
+                    continue;
+
+                int overlap = get_total_map_local_overlap_area(layout, item_index, box);
+                int score = p * 650 + distances[d] * distances[d] * 2
+                    + abs(slides[s]) * 10
+                    + overlap * 45
+                    + get_total_map_local_node_penalty(layout, item.anchor, box)
+                    + get_total_map_local_edge_penalty(layout, box);
+
+                if (!found || score < best_score) {
+                    found = true;
+                    best_score = score;
+                    best_box = box;
+                }
+            }
+        }
+    }
+
+    if (found)
+        item.rectangle = best_box;
+}
+
+void prepare_total_map_labels(const vertex vertices[], int vertex_number)
+{
+    set_map_font(20);
+    map_label_layout layout;
+    ostringstream key;
+    const int limit = vertex_number < physical_vertex_number
+        ? vertex_number : physical_vertex_number;
+    for (int i = 0; i < limit; ++i) {
+        screen_point point = get_total_map_point(vertices, vertex_number, i);
+        layout.nodes.push_back(point);
+        key << i << ':' << point.x << ',' << point.y << ';';
+
+        // 69号昌吉东路绿苑路在总览图只保留站点圆和线路，不绘制文字标签。
+        if (i == 69)
             continue;
 
-        used_names[used_name_number++] = entity_name;
-        label_vertices[label_number++] = i;
+        string entity = is_jiading_internal_vertex(i)
+            ? "嘉定校区" : get_entity_station_name(vertices, i);
+        bool duplicate = false;
+        for (size_t j = 0; j < layout.items.size(); ++j)
+            if (layout.items[j].entity_name == entity) duplicate = true;
+        if (duplicate) continue;
+        map_label_item item;
+        item.vertex_id = is_jiading_internal_vertex(i) ? -1 : i;
+        item.entity_name = entity;
+        item.anchor = point;
+        string display_name = item.vertex_id < 0
+            ? entity : get_map_display_name(vertices, i);
+        // “绿苑路曹安公路”按道路名边界拆成两行，避免自动压窄后出现“绿苑 / 路曹安公路”。
+        item.text = build_station_label_text(display_name, i == 59 ? 70 : 180);
+        // 用EasyX实际字宽建盒；高亮保持同字号同字重，测量与绘制一致。
+        key << entity << ':' << item.text.first_line << ':' << item.text.second_line
+            << ':' << item.text.width << ',' << item.text.height << ';';
+        layout.items.push_back(item);
     }
+    for (int i = 0; i < vertex_number; ++i) {
+        for (const edge_node* edge = vertices[i].first_edge; edge; edge = edge->next) {
+            if (edge->to <= i || edge->to >= vertex_number || edge->type == edge_type::TRANSFER)
+                continue;
 
-    for (int i = 1; i < label_number; i++) {
-        int current_vertex = label_vertices[i];
-        int current_density = get_station_label_density(
-            vertices, vertex_number, current_vertex);
-        int j = i - 1;
+            int from_physical = map_to_physical_vertex(vertices, vertex_number, i);
+            int to_physical = map_to_physical_vertex(vertices, vertex_number, edge->to);
+            bool shared_fengbang_corridor_duplicate =
+                edge->type == edge_type::BUS
+                && (edge->line_id == 4 || edge->line_id == 6)
+                && ((from_physical == 74 && is_jiading_corridor_terminal(to_physical))
+                    || (to_physical == 74 && is_jiading_corridor_terminal(from_physical)));
+            if (shared_fengbang_corridor_duplicate)
+                continue;
 
-        while (j >= 0
-            && get_station_label_density(vertices, vertex_number, label_vertices[j])
-                < current_density) {
-            label_vertices[j + 1] = label_vertices[j];
-            j--;
+            screen_point points[16];
+            int count = get_total_map_edge_points(vertices, vertex_number,
+                i, edge->to, *edge, points);
+            for (int p = 1; p < count; ++p) {
+                map_label_edge segment;
+                segment.from = points[p - 1];
+                segment.to = points[p];
+                if (segment.from.x == segment.to.x && segment.from.y == segment.to.y)
+                    continue;
+                bool duplicate = false;
+                for (size_t j = 0; j < layout.edges.size(); ++j) {
+                    const map_label_edge& other = layout.edges[j];
+                    if ((other.from.x == segment.from.x && other.from.y == segment.from.y
+                        && other.to.x == segment.to.x && other.to.y == segment.to.y)
+                        || (other.to.x == segment.from.x && other.to.y == segment.from.y
+                            && other.from.x == segment.to.x && other.from.y == segment.to.y))
+                        duplicate = true;
+                }
+                if (!duplicate) {
+                    layout.edges.push_back(segment);
+                    key << segment.from.x << ',' << segment.from.y << ':'
+                        << segment.to.x << ',' << segment.to.y << ';';
+                }
+            }
         }
-        label_vertices[j + 1] = current_vertex;
+    }
+    layout.key = key.str();
+    if (layout.key == total_map_labels.key) return;
+    for (size_t i = 0; i < layout.items.size(); ++i) {
+        for (size_t j = 0; j < layout.items.size(); ++j) {
+            int dx = layout.items[i].anchor.x - layout.items[j].anchor.x;
+            int dy = layout.items[i].anchor.y - layout.items[j].anchor.y;
+            if (i != j && dx * dx + dy * dy < 170 * 170)
+                ++layout.items[i].density;
+        }
+        build_map_label_candidates(layout.items[i], layout);
+    }
+    stable_sort(layout.items.begin(), layout.items.end(),
+        [](const map_label_item& a, const map_label_item& b) {
+            if (a.density != b.density) return a.density > b.density;
+            return a.text.width * a.text.height > b.text.width * b.text.height;
+        });
+    vector<bool> assigned(layout.items.size(), false);
+    int budget = 12000;
+    if (!place_map_labels(layout, assigned, static_cast<int>(layout.items.size()), budget))
+        throw runtime_error("Map labels cannot fit near their stations.");
+    // 有界回访：先放的密集标签也能让位，只有变好且不碰撞才移动。
+    for (int pass = 0; pass < 3; ++pass) {
+        bool changed = false;
+        for (int i = static_cast<int>(layout.items.size()) - 1; i >= 0; --i) {
+            map_label_item& item = layout.items[i];
+            int old_cost = map_label_position_cost(item.rectangle, item, layout);
+            for (size_t j = 0; j < item.candidates.size(); ++j) {
+                if (item.candidates[j].cost >= old_cost) break;
+                if (is_map_label_free(item.candidates[j].rectangle, layout,
+                    static_cast<int>(layout.items.size()), i)) {
+                    item.rectangle = item.candidates[j].rectangle;
+                    item.text = item.candidates[j].text;
+                    changed = true; break;
+                }
+            }
+        }
+        if (!changed) break;
     }
 
-    station_label_rectangle placed_rectangles[physical_vertex_number];
-    int placed_number = 0;
+    // 明确的局部版式要求在统一避让之后做最后收尾。
+    for (size_t i = 0; i < layout.items.size(); ++i) {
+        map_label_item& item = layout.items[i];
+        if (item.vertex_id == 32) {
+            // 大世界必须位于14号线站点正上方。这里允许和附近线路/标签有少量覆盖，
+            // 但保持紧贴站点，避免再次被自动布局推到右边。
+            item.text = build_station_label_text("大世界", 180);
+            station_label_rectangle box;
+            box.left = item.anchor.x - item.text.width / 2;
+            box.top = item.anchor.y - item.text.height - 7;
+            box.right = box.left + item.text.width;
+            box.bottom = box.top + item.text.height;
+            if (box.left < 8) {
+                box.right += 8 - box.left;
+                box.left = 8;
+            }
+            if (box.right > ui_layout::map_width - 8) {
+                int shift = box.right - (ui_layout::map_width - 8);
+                box.left -= shift;
+                box.right -= shift;
+            }
+            item.rectangle = box;
+        }
+        else if (item.vertex_id < 0 && item.entity_name == "嘉定校区") {
+            // 嘉定校区四个字固定回到校园枢纽正上方；69号近邻点没有标签，不再需要让位。
+            station_label_rectangle box;
+            box.left = item.anchor.x - item.text.width / 2;
+            box.top = item.anchor.y - item.text.height - 20;
+            box.right = box.left + item.text.width;
+            box.bottom = box.top + item.text.height;
+            item.rectangle = box;
+        }
+        else if (item.vertex_id == 88) {
+            int shift = 18;
+            int room = (ui_layout::map_width - 8) - item.rectangle.right;
+            if (shift > room) shift = room;
+            if (shift > 0) {
+                item.rectangle.left += shift;
+                item.rectangle.right += shift;
+            }
+        }
+    }
+
+    // 最后一轮只处理截图里确实需要人工收口的标签。
+    // 原则：优先让站名贴近自己的站点；允许轻微压线，但避免标签互相遮挡或产生长引线。
+    // 上海汽车城不再强制向右，恢复统一自动布局，让左侧嘉定支线保持原来的清晰关系。
+    const int lv_dirs[] = { 7, 1, 2, 6 };             // 绿苑路曹安公路：校园左下附近
+    const int xinhuang_dirs[] = { 0, 4, 3, 5 };       // 新黄公路：站点上方/右上
+    const int xujia_dirs[] = { 4, 3, 0, 6 };          // 许家村：右上优先，短名并贴近站点
+    const int yutang_dirs[] = { 7, 2, 1, 5 };         // 于塘南路：略向左下
+    const int zhenru_xicun_dirs[] = { 2, 5, 7, 0 };   // 真如西村：左侧
+    const int caoyang_bacun_dirs[] = { 7, 2, 1, 5 };  // 曹杨八村：左下
+    const int zhongning_dirs[] = { 4, 3, 0, 6 };      // 中宁路：右上空白区，紧贴站点，不需要长引线
+    const int caoyang_dirs[] = { 4, 3, 0, 6 };        // 曹杨路：右上空白区，紧贴站点，不需要长引线
+    const int zhenxin_dirs[] = { 1 };                 // 真新新村：直接压到站点下方，不再使用长引线
+    const int fengqiao_dirs[] = { 7, 1, 2, 6 };       // 枫桥路：恢复左下位置，保持靠近站点
+    const int lanxi_dirs[] = { 6, 3, 1, 7 };          // 曹杨路兰溪路：右下/右侧
+    const int zhenguang_dirs[] = { 1, 6, 7, 3 };      // 真光路：向下一点
+    const int dingbian_dirs[] = { 1, 6, 7, 2 };       // 定边路：向下一点
+    const int jingansi_dirs[] = { 7, 2, 1, 5 };       // 静安寺：左下且更贴近站点
+    const int people_dirs[] = { 2, 5, 0, 7 };         // 人民广场：左侧靠站
+    const int wukang_dirs[] = { 1, 6, 3, 7 };         // 武康大楼：下方或右下
+    const int huangpi_dirs[] = { 3, 4, 6, 0 };        // 一大会址·黄陂南路：恢复站点右侧
+
+    polish_total_map_label_near(layout, 59, lv_dirs, 4);
+    polish_total_map_label_near(layout, 83, xinhuang_dirs, 4);
+    polish_total_map_label_near(layout, 82, xujia_dirs, 4, 8);
+    polish_total_map_label_near(layout, 66, yutang_dirs, 4);
+
+    polish_total_map_label_near(layout, 85, zhenru_xicun_dirs, 4);
+    polish_total_map_label_near(layout, 86, caoyang_bacun_dirs, 4);
+    // 这里两个站右上方有连续空白，优先用近距离右上候选，避免本来没必要的灰色引线。
+    polish_total_map_label_near(layout, 38, zhongning_dirs, 4, 8);
+    polish_total_map_label_near(layout, 16, caoyang_dirs, 4, 8);
+    polish_total_map_label_near(layout, 42, zhenxin_dirs, 1, 8);
+    polish_total_map_label_near(layout, 17, fengqiao_dirs, 4);
+    polish_total_map_label_near(layout, 87, lanxi_dirs, 4);
+
+    // 14号线西段标签尽量沿线路下侧排开，减少上下跳动。
+    polish_total_map_label_near(layout, 41, zhenguang_dirs, 4);
+    polish_total_map_label_near(layout, 43, dingbian_dirs, 4);
+    polish_total_map_label_near(layout, 34, jingansi_dirs, 4);
+
+    polish_total_map_label_near(layout, 50, people_dirs, 4);
+    polish_total_map_label_near(layout, 55, wukang_dirs, 4);
+    polish_total_map_label_near(layout, 33, huangpi_dirs, 4, 8);
+
+    // 已经稳定的标签只做像素级微调，不重新参与全局排版，防止牵连周围站名。
+    for (size_t i = 0; i < layout.items.size(); ++i) {
+        map_label_item& item = layout.items[i];
+        int dx = 0, dy = 0;
+        if (item.vertex_id == 81 || item.vertex_id == 79) {
+            // 星塔路、联西路：保持上一版的小幅左下收口。
+            dx = -9; dy = 6;
+        }
+        else if (item.vertex_id == 88) {
+            // 国康路四平路：横向位置已经合适，只向下压一点。
+            dy = 7;
+        }
+        else if (item.vertex_id == 18) {
+            // 真如：沿当前方向再向左下收一点，避免重新触发整片排版。
+            dx = -8; dy = 6;
+        }
+        else {
+            continue;
+        }
+
+        station_label_rectangle moved = item.rectangle;
+        moved.left += dx;
+        moved.right += dx;
+        moved.top += dy;
+        moved.bottom += dy;
+        if (moved.left < 8 || moved.top < 8
+            || moved.right > ui_layout::map_width - 8
+            || moved.bottom > ui_layout::network_bottom - 8)
+            continue;
+
+        // 只接受不增加文字相互覆盖的微调；视觉位置变好，但不拿清晰度换位置。
+        int old_overlap = get_total_map_local_overlap_area(layout, static_cast<int>(i), item.rectangle);
+        int new_overlap = get_total_map_local_overlap_area(layout, static_cast<int>(i), moved);
+        if (new_overlap <= old_overlap)
+            item.rectangle = moved;
+    }
+
+    total_map_labels = layout;
+}
+
+void draw_station_label(const station_label_rectangle& box,
+    const station_label_text& label)
+{
+    setfillcolor(RGB(247, 250, 252));
+    solidrectangle(box.left - 2, box.top - 1, box.right + 2, box.bottom + 1);
     set_map_font(20);
+    setbkmode(TRANSPARENT);
+    settextcolor(RGB(28, 36, 48));
+    outtextxy(box.left, box.top, label.first_line.c_str());
+    if (label.line_number == 2)
+        outtextxy(box.left, box.top + 22, label.second_line.c_str());
+}
 
-    for (int i = 0; i < label_number; i++) {
-        int vertex_id = label_vertices[i];
-        string station_name = get_map_display_name(vertices, vertex_id);
-        station_label_text label = build_station_label_text(station_name, 180);
-        screen_point point = get_total_map_point(vertices, vertex_number, vertex_id);
-
-        station_label_rectangle chosen;
-    if (!get_manual_station_label_rectangle(
-        vertex_id, point, label, chosen)) {
-        chosen = choose_station_label_rectangle(
-            point.x, point.y, label.width, label.height,
-            placed_rectangles, placed_number,
-            vertices, vertex_number, vertex_id);
+// 只有偏移超过32像素时加细引线；先画引线再画站名，且引线不能穿过其它标签。
+void draw_total_map_label_leader(size_t index)
+{
+    const map_label_item& item = total_map_labels.items[index];
+    // 中宁路、曹杨路和真新新村都已人工收口到站点近邻，不再画多余引线。
+    if (item.vertex_id == 38 || item.vertex_id == 16 || item.vertex_id == 42)
+        return;
+    const station_label_rectangle& box = item.rectangle;
+    screen_point end;
+    end.x = max(box.left, min(item.anchor.x, box.right));
+    end.y = max(box.top, min(item.anchor.y, box.bottom));
+    int dx = end.x - item.anchor.x, dy = end.y - item.anchor.y;
+    if (dx * dx + dy * dy <= 32 * 32) return;
+    // 从站点圆外开始，保留选中圆点和线路的可辨识轮廓。
+    double length = sqrt(static_cast<double>(dx * dx + dy * dy));
+    screen_point start;
+    start.x = item.anchor.x + static_cast<int>(dx * 12 / length);
+    start.y = item.anchor.y + static_cast<int>(dy * 12 / length);
+    for (size_t j = 0; j < total_map_labels.items.size(); ++j) {
+        if (j != index && does_network_edge_cross_label(start, end,
+            total_map_labels.items[j].rectangle)) return;
     }
+    setlinecolor(RGB(150, 163, 172));
+    setlinestyle(PS_SOLID, 1);
+    line(start.x, start.y, end.x, end.y);
+}
 
-    draw_station_label(chosen, label);
-        placed_rectangles[placed_number++] = chosen;
+void draw_all_station_names(const vertex vertices[], int vertex_number)
+{
+    prepare_total_map_labels(vertices, vertex_number);
+    for (size_t i = 0; i < total_map_labels.items.size(); ++i)
+        draw_total_map_label_leader(i);
+    for (size_t i = 0; i < total_map_labels.items.size(); ++i)
+        draw_station_label(total_map_labels.items[i].rectangle, total_map_labels.items[i].text);
+}
+
+// 重点站和悬停站复用已分配的矩形，不再在圆点右上角另盖一块名称框。
+void emphasize_total_map_label(const vertex vertices[], int vertex_id, COLORREF color)
+{
+    string entity = is_jiading_internal_vertex(vertex_id)
+        ? "嘉定校区" : get_entity_station_name(vertices, vertex_id);
+    for (size_t i = 0; i < total_map_labels.items.size(); ++i) {
+        const map_label_item& item = total_map_labels.items[i];
+        if (item.entity_name != entity) continue;
+        const station_label_rectangle& box = item.rectangle;
+        setlinecolor(color);
+        setlinestyle(PS_SOLID, 1);
+        rectangle(box.left - 3, box.top - 2, box.right + 3, box.bottom + 2);
+        break;
     }
-
-    string campus_text = "嘉定校区";
-    station_label_text campus_label = build_station_label_text(campus_text, 180);
-    screen_point campus_point;
-    campus_point.x = scale_total_map_x(150);
-    campus_point.y = scale_total_map_y(235);
-
-    station_label_rectangle campus_rectangle;
-    campus_rectangle.left = campus_point.x - campus_label.width / 2;
-    campus_rectangle.top = campus_point.y - campus_label.height - 22;
-    campus_rectangle.right = campus_rectangle.left + campus_label.width;
-    campus_rectangle.bottom = campus_rectangle.top + campus_label.height;
-    draw_station_label(campus_rectangle, campus_label);
 }
 
 /***************************************************************************
@@ -2408,8 +2860,8 @@ int find_clicked_vertex(const vertex vertices[], int vertex_number,
     const int click_radius = 10;
 
     screen_point campus_point;
-    campus_point.x = scale_total_map_x(150);
-    campus_point.y = scale_total_map_y(235);
+    campus_point.x = scale_total_map_x(ui_layout::campus_logical_x);
+    campus_point.y = scale_total_map_y(ui_layout::campus_logical_y);
     int campus_dx = mouse_x - campus_point.x;
     int campus_dy = mouse_y - campus_point.y;
     if (campus_dx * campus_dx + campus_dy * campus_dy <= 13 * 13)
@@ -2668,8 +3120,7 @@ void draw_global_route_labels(const vertex vertices[], int vertex_number,
             continue;
 
         drawn_names[drawn_number++] = entity_name;
-        screen_point point = get_total_map_point(vertices, vertex_number, i);
-        draw_station_name_box(entity_name, point.x, point.y);
+        emphasize_total_map_label(vertices, i, RGB(90, 113, 135));
     }
 }
 
@@ -2834,10 +3285,7 @@ void draw_hovered_station(const vertex vertices[], int vertex_number,
         draw_station_name_box(vertices[state.hovered_vertex].name, point.x, point.y);
     }
     else {
-        screen_point point = get_total_map_point(
-            vertices, vertex_number, state.hovered_vertex);
-        draw_station_name_box(
-            get_entity_station_name(vertices, state.hovered_vertex), point.x, point.y);
+        emphasize_total_map_label(vertices, state.hovered_vertex, RGB(30, 105, 170));
     }
 }
 
@@ -2959,7 +3407,9 @@ void draw_control_panel(const vertex vertices[], int vertex_number,
     time_stream << setw(2) << setfill('0') << state.start_hour
         << ":" << setw(2) << state.start_minute;
     string time_text = time_stream.str();
-    outtextxy(left + 135, 222, time_text.c_str());
+    int time_text_width = textwidth(time_text.c_str());
+    int time_text_x = (left + right - time_text_width) / 2;
+    outtextxy(time_text_x, 222, time_text.c_str());
     draw_button(right - 64, 214, right, 252, "+5");
 
     set_ui_font(16, FW_BOLD);
@@ -3201,16 +3651,16 @@ void draw_easyx_interface(const vertex vertices[], int vertex_number,
 ***************************************************************************/
 void invalidate_route_result(ui_state& state)
 {
-	state.route_ready = false;
-	state.path_vertex_number = 0;
-	state.segment_number = 0;
-	state.guide_page = 0;
-	state.stop_number = 0;
-	state.total_time_cost = 0;
-	state.total_fare_cost = 0;
-	state.arrival_hour = 0;
-	state.arrival_minute = 0;
-	state.days_passed = 0;
+    state.route_ready = false;
+    state.path_vertex_number = 0;
+    state.segment_number = 0;
+    state.guide_page = 0;
+    state.stop_number = 0;
+    state.total_time_cost = 0;
+    state.total_fare_cost = 0;
+    state.arrival_hour = 0;
+    state.arrival_minute = 0;
+    state.days_passed = 0;
 }
 
 /***************************************************************************
@@ -3222,21 +3672,21 @@ void invalidate_route_result(ui_state& state)
 ***************************************************************************/
 void reset_ui_state(ui_state& state)
 {
-	state.start_vertex = -1;
-	state.end_vertex = -1;
+    state.start_vertex = -1;
+    state.end_vertex = -1;
 
-	state.k = 0;
-	state.allow_bike = false;
-	state.show_all_names = true;
-	state.is_jiading_campus = false;
+    state.k = 0;
+    state.allow_bike = false;
+    state.show_all_names = true;
+    state.is_jiading_campus = false;
 
-	state.start_hour = 8;
-	state.start_minute = 30;
-	state.hovered_vertex = -1;
+    state.start_hour = 8;
+    state.start_minute = 30;
+    state.hovered_vertex = -1;
 
-	invalidate_route_result(state);
+    invalidate_route_result(state);
 
-	state.message = "请选择起点";
+    state.message = "请选择起点";
 }
 
 /***************************************************************************
@@ -3249,78 +3699,78 @@ void reset_ui_state(ui_state& state)
   说    明：Dijkstra和原有统计保持不变；build_paths之后增加route_segment解释层供EasyX使用
 ***************************************************************************/
 bool calculate_route_for_ui(vertex vertices[], int vertex_number,
-	ui_state& state)
+    ui_state& state)
 {
-	invalidate_route_result(state);
+    invalidate_route_result(state);
 
-	if (!is_valid_vertex_id(state.start_vertex, vertex_number)
-		|| !is_valid_vertex_id(state.end_vertex, vertex_number)) {
+    if (!is_valid_vertex_id(state.start_vertex, vertex_number)
+        || !is_valid_vertex_id(state.end_vertex, vertex_number)) {
 
-		state.message = "请先选择起点和终点";
-		return false;
-	}
+        state.message = "请先选择起点和终点";
+        return false;
+    }
 
-	if (state.start_vertex == state.end_vertex) {
-		state.message = "起点和终点不能相同";
-		return false;
-	}
+    if (state.start_vertex == state.end_vertex) {
+        state.message = "起点和终点不能相同";
+        return false;
+    }
 
-	if (!dijkstra(vertices, vertex_number,
-		state.start_vertex, state.k,
-		state.distance, state.previous_vertex,
-		state.previous_edge,
-		state.allow_bike)) {
-		state.message = "Dijkstra计算失败";
-		return false;
-	}
+    if (!dijkstra(vertices, vertex_number,
+        state.start_vertex, state.k,
+        state.distance, state.previous_vertex,
+        state.previous_edge,
+        state.allow_bike)) {
+        state.message = "Dijkstra计算失败";
+        return false;
+    }
 
-	if (!build_paths(state.previous_vertex, vertex_number,
-		state.start_vertex, state.end_vertex,
-		state.path, state.path_vertex_number)) {
+    if (!build_paths(state.previous_vertex, vertex_number,
+        state.start_vertex, state.end_vertex,
+        state.path, state.path_vertex_number)) {
 
-		state.message = "当前起终点之间没有可用路线";
-		return false;
-	}
+        state.message = "当前起终点之间没有可用路线";
+        return false;
+    }
 
-	if (!calculate_path_statistics(
-		state.path, state.path_vertex_number,
-		state.previous_edge,
-		state.total_time_cost,
-		state.total_fare_cost,
-		state.allow_bike)) {
+    if (!calculate_path_statistics(
+        state.path, state.path_vertex_number,
+        state.previous_edge,
+        state.total_time_cost,
+        state.total_fare_cost,
+        state.allow_bike)) {
 
-		state.message = "路线统计失败";
-		return false;
-	}
+        state.message = "路线统计失败";
+        return false;
+    }
 
-	if (!build_route_segments(
-		vertices, vertex_number,
-		state.path, state.path_vertex_number,
-		state.previous_edge, state.allow_bike,
-		state.segments, state.segment_number,
-		state.stop_number)) {
+    if (!build_route_segments(
+        vertices, vertex_number,
+        state.path, state.path_vertex_number,
+        state.previous_edge, state.allow_bike,
+        state.segments, state.segment_number,
+        state.stop_number)) {
 
-		state.message = "路线阶段生成失败";
-		return false;
-	}
+        state.message = "路线阶段生成失败";
+        return false;
+    }
 
-	if (!calculate_arrival_time(
-		state.start_hour,
-		state.start_minute,
-		state.total_time_cost,
-		state.arrival_hour,
-		state.arrival_minute,
-		state.days_passed)) {
+    if (!calculate_arrival_time(
+        state.start_hour,
+        state.start_minute,
+        state.total_time_cost,
+        state.arrival_hour,
+        state.arrival_minute,
+        state.days_passed)) {
 
-		state.message = "到达时间计算失败";
-		return false;
-	}
+        state.message = "到达时间计算失败";
+        return false;
+    }
 
-	state.guide_page = 0;
-	state.route_ready = true;
-	state.message = "路线规划完成";
+    state.guide_page = 0;
+    state.route_ready = true;
+    state.message = "路线规划完成";
 
-	return true;
+    return true;
 }
 
 /***************************************************************************
@@ -3538,106 +3988,106 @@ void run_easyx_interface(vertex vertices[], int vertex_number,
 ***************************************************************************/
 int main()
 {
-	enable_high_dpi_rendering();
+    enable_high_dpi_rendering();
 
-	string lines_path = "data/lines.csv";//线路CSV路径
-	string stations_path = "data/stations.csv";//站点CSV路径
-	string edges_path = "data/edges.csv";//边CSV路径
-	transit_line lines[max_lines];
-	int line_number = 0;//当前实际线路数量，初始还没加站点所以为0
-	if (!load_transit_lines(lines_path, lines, line_number)) {
-		cout << "加载线路CSV文件失败" << endl;
-		return 1;
-	}
+    string lines_path = "data/lines.csv";//线路CSV路径
+    string stations_path = "data/stations.csv";//站点CSV路径
+    string edges_path = "data/edges.csv";//边CSV路径
+    transit_line lines[max_lines];
+    int line_number = 0;//当前实际线路数量，初始还没加站点所以为0
+    if (!load_transit_lines(lines_path, lines, line_number)) {
+        cout << "加载线路CSV文件失败" << endl;
+        return 1;
+    }
 
-	vertex vertices[max_vertices];
-	int vertex_number = 0;//当前实际顶点数量，初始还没加站点所以为0
-	if (!load_vertices(stations_path, vertices, vertex_number)) {
-		cout << "加载站点CSV文件失败" << endl;
-		return 2;
-	}
+    vertex vertices[max_vertices];
+    int vertex_number = 0;//当前实际顶点数量，初始还没加站点所以为0
+    if (!load_vertices(stations_path, vertices, vertex_number)) {
+        cout << "加载站点CSV文件失败" << endl;
+        return 2;
+    }
 
-	if (!load_edges(edges_path, vertices, vertex_number, lines, line_number)) {
-		cout << "加载边CSV文件失败" << endl;
-		return 3;
-	}
-	
+    if (!load_edges(edges_path, vertices, vertex_number, lines, line_number)) {
+        cout << "加载边CSV文件失败" << endl;
+        return 3;
+    }
+
 
 #if test_adjacency_list
-	for (int i = 0; i < vertex_number; i++)
-		output_one_step_vertex(vertices[i]);
+    for (int i = 0; i < vertex_number; i++)
+        output_one_step_vertex(vertices[i]);
 #endif
 
-	initgraph(ui_layout::window_width, ui_layout::window_height, EX_SHOWCONSOLE);
-	lock_easyx_window_size();
-	IMAGE jiading_background;
+    initgraph(ui_layout::window_width, ui_layout::window_height, EX_SHOWCONSOLE);
+    lock_easyx_window_size();
+    IMAGE jiading_background;
 
-	loadimage(
-		&jiading_background,
-		"data/jiading_campus.png");
+    loadimage(
+        &jiading_background,
+        "data/jiading_campus.png");
 
-	jiading_map_node jiading_map_nodes[] = {
-	{56, 536,382, 545, 383, "教学楼/定班车点"},
-	{57, 408, 490, 360, 470, "济事楼"},
-	{58, 642, 326, 660, 305, "友园8号楼"},
-	{59, 350, 510, 240, 530, "绿苑路曹安公路"},
-	{60, 482, 330, 495, 310, "仰望星空停靠点"},
-	{61, 601, 353, 615, 355, "7号楼候车点"},
-	{62, 586, 72, 600, 82, "北门"},
-	{63, 12, 30, 30, 52, "大桥东侧骑车点"},
-	{69, 550, 62, 585, 40, "昌吉东路绿苑路"},
-	{73, 95, 390, 115, 365, "曹安公路二十三号桥"},
-	{84, 668, 652, 690, 620, "曹安公路嘉松北路"}
-	};
+    jiading_map_node jiading_map_nodes[] = {
+    {56, 536,382, 545, 383, "教学楼/定班车点"},
+    {57, 408, 490, 360, 470, "济事楼"},
+    {58, 642, 326, 660, 305, "友园8号楼"},
+    {59, 350, 510, 240, 530, "绿苑路曹安公路"},
+    {60, 482, 330, 495, 310, "仰望星空停靠点"},
+    {61, 601, 353, 615, 355, "7号楼候车点"},
+    {62, 586, 72, 600, 82, "北门"},
+    {63, 12, 30, 30, 52, "大桥东侧骑车点"},
+    {69, 550, 62, 585, 40, "昌吉东路绿苑路"},
+    {73, 95, 390, 115, 365, "曹安公路二十三号桥"},
+    {84, 668, 652, 690, 620, "曹安公路嘉松北路"}
+    };
 
-	const int jiading_map_node_number =
-		sizeof(jiading_map_nodes) / sizeof(jiading_map_nodes[0]);
+    const int jiading_map_node_number =
+        sizeof(jiading_map_nodes) / sizeof(jiading_map_nodes[0]);
 
 #if test_min_heap
-	min_heap test;
-	initialize_heap(test, 2);
-	insert_heap(test, 0, 2);
-	insert_heap(test, 1, 5);
-	insert_heap(test, 2, 3);
-	cout << "测试扩容功能，当前size和capacity分别是：" << test.size << " " << test.capacity << endl;
-	insert_heap(test, 3, 8);
-	insert_heap(test, 4, 9);
-	insert_heap(test, 5, 4);
-	insert_heap(test, 6, 1);
-	cout << "测试扩容功能，当前size和capacity分别是：" << test.size << " " << test.capacity << endl;
-	while (!is_heap_empty(test)) {//只要还没空，就一直取元素，相比直接判断size在忘记extract_min会自动--的时候额外加了一行test.size--且初始size为奇数时不会死循环
-		heap_node min;
-		extract_min(test, min);
-		cout << "本轮取出的堆顶元素序号和距离是：" << min.vertex_id << " " << min.distance << endl;
-	}
-	heap_node empty;
-	cout << "测试空堆弹出是否正常，0是对的：" << extract_min(test, empty) << endl;
-	release_heap(test);
+    min_heap test;
+    initialize_heap(test, 2);
+    insert_heap(test, 0, 2);
+    insert_heap(test, 1, 5);
+    insert_heap(test, 2, 3);
+    cout << "测试扩容功能，当前size和capacity分别是：" << test.size << " " << test.capacity << endl;
+    insert_heap(test, 3, 8);
+    insert_heap(test, 4, 9);
+    insert_heap(test, 5, 4);
+    insert_heap(test, 6, 1);
+    cout << "测试扩容功能，当前size和capacity分别是：" << test.size << " " << test.capacity << endl;
+    while (!is_heap_empty(test)) {//只要还没空，就一直取元素，相比直接判断size在忘记extract_min会自动--的时候额外加了一行test.size--且初始size为奇数时不会死循环
+        heap_node min;
+        extract_min(test, min);
+        cout << "本轮取出的堆顶元素序号和距离是：" << min.vertex_id << " " << min.distance << endl;
+    }
+    heap_node empty;
+    cout << "测试空堆弹出是否正常，0是对的：" << extract_min(test, empty) << endl;
+    release_heap(test);
 #endif
 
 #if test_weight
-	edge_node cal;
-	cal.time_cost = 6;
-	cal.fare_cost = 0.5;
-	cout << calculate_weight(cal, 0) << endl << calculate_weight(cal, 8) << endl;
+    edge_node cal;
+    cal.time_cost = 6;
+    cal.fare_cost = 0.5;
+    cout << calculate_weight(cal, 0) << endl << calculate_weight(cal, 8) << endl;
 #endif
-	
-	
-	ui_state state;
 
-	run_easyx_interface(
-		vertices,
-		vertex_number,
-		lines,
-		line_number,
-		jiading_map_nodes,
-		jiading_map_node_number,
-		jiading_background,
-		state);
 
-	for (int i = 0; i < vertex_number; i++)
-		release_edges(vertices[i]);
-	closegraph();
+    ui_state state;
 
-	return 0;
+    run_easyx_interface(
+        vertices,
+        vertex_number,
+        lines,
+        line_number,
+        jiading_map_nodes,
+        jiading_map_node_number,
+        jiading_background,
+        state);
+
+    for (int i = 0; i < vertex_number; i++)
+        release_edges(vertices[i]);
+    closegraph();
+
+    return 0;
 }
