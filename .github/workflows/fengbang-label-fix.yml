@@ -1,0 +1,63 @@
+name: fengbang-label-fix
+
+on:
+  push:
+    branches:
+      - fengbang-label-fix
+    paths:
+      - .github/workflows/fengbang-label-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fengbang-label-fix
+          fetch-depth: 0
+
+      - name: 修正封浜附近标签
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('main.cpp')
+          raw = path.read_bytes()
+          encoding = None
+          for candidate in ('gb2312', 'utf-8'):
+              try:
+                  text = raw.decode(candidate)
+                  encoding = candidate
+                  break
+              except UnicodeDecodeError:
+                  pass
+          if encoding is None:
+              raise SystemExit('无法识别main.cpp字符集')
+          text = text.replace('\r\n', '\n').replace('\r', '\n')
+
+          old = '''        case 47: dx = -62;  dy = -36; break; // 封浜地铁\n        case 74: dx = 18;   dy = 12;  break; // 封浜公交站\n        case 75: dx = 18;   dy = -32; break; // 翔江路\n'''
+          new = '''        case 46: dx = 14;   dy = -46; break; // 乐秀路\n        case 47: dx = -56;  dy = 22;  break; // 封浜地铁\n        case 74: dx = 20;   dy = 24;  break; // 封浜公交站\n        case 75: dx = -88;  dy = -44; break; // 翔江路\n'''
+          if old not in text:
+              raise SystemExit('未找到封浜附近原标签布局')
+          text = text.replace(old, new, 1)
+
+          if text.count('{') != text.count('}'):
+              raise SystemExit('花括号数量不平衡')
+          out = text.replace('\n', '\r\n').encode(encoding)
+          path.write_bytes(out)
+          check = path.read_bytes()
+          check.decode(encoding)
+          if b'\n' in check.replace(b'\r\n', b''):
+              raise SystemExit('存在非CRLF换行')
+          print('封浜附近标签修正完成；字符集保持', encoding, '；CRLF检查通过')
+
+      - name: 提交修改
+        run: |
+          rm .github/workflows/fengbang-label-fix.yml
+          git config user.name "LV-ZHU"
+          git config user.email "212522225+LV-ZHU@users.noreply.github.com"
+          git add -A
+          git commit -m "修正封浜附近标签布局"
+          git push origin HEAD:fengbang-label-fix
