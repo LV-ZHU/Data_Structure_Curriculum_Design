@@ -1619,21 +1619,21 @@ screen_point get_total_map_point(const vertex vertices[],
         logical_y = 235;
     }
 
-    // 822路按“封浜公交站 -> 嘉定校区正门”方向排布；其余公交节点恢复CSV原始坐标
-switch (physical_vertex) {
-    case 74: logical_x = 325; logical_y = 375; break; // 封浜公交站，紧邻封浜地铁站
-    case 75: logical_x = 309; logical_y = 362; break; // 翔江路
-    case 76: logical_x = 293; logical_y = 350; break; // 曹丰路
-    case 77: logical_x = 277; logical_y = 337; break; // 宝园五路
-    case 78: logical_x = 261; logical_y = 324; break; // 宝园七路
-    case 79: logical_x = 245; logical_y = 312; break; // 联西路
-    case 80: logical_x = 229; logical_y = 299; break; // 联群路
-    case 81: logical_x = 213; logical_y = 286; break; // 星塔路
-    case 82: logical_x = 197; logical_y = 274; break; // 许家东街村
-    case 83: logical_x = 181; logical_y = 261; break; // 新黄公路
-    case 84: logical_x = 165; logical_y = 248; break; // 嘉松北路，靠近嘉定校区
-    default: break;
-}
+    // 822路沿“封浜公交站 -> 嘉定校区正门”直线方向排布，封浜公交站紧贴封浜地铁站
+    switch (physical_vertex) {
+        case 74: logical_x = 325; logical_y = 355; break; // 封浜公交站
+        case 75: logical_x = 310; logical_y = 345; break; // 翔江路
+        case 76: logical_x = 294; logical_y = 336; break; // 曹丰路
+        case 77: logical_x = 279; logical_y = 326; break; // 宝园五路
+        case 78: logical_x = 263; logical_y = 317; break; // 宝园七路
+        case 79: logical_x = 248; logical_y = 307; break; // 联西路
+        case 80: logical_x = 232; logical_y = 298; break; // 联群路
+        case 81: logical_x = 217; logical_y = 288; break; // 星塔路
+        case 82: logical_x = 201; logical_y = 279; break; // 许家东街村
+        case 83: logical_x = 186; logical_y = 269; break; // 新黄公路
+        case 84: logical_x = 170; logical_y = 260; break; // 嘉松北路
+        default: break;
+    }
 
     screen_point point;
     point.x = scale_total_map_x(logical_x);
@@ -1829,6 +1829,8 @@ string get_map_display_name(const vertex vertices[], int vertex_id)
 
     if (name == "公交昌吉东路站")
         return "昌吉东路站";
+    if (name == "于塘南路望融路")
+        return "望融路";
     if (name == "同济大学沪西校区教师班车点")
         return "沪西校区班车点";
     if (name == "同济大学沪北校区")
@@ -2257,39 +2259,39 @@ bool get_manual_station_label_rectangle(int vertex_id,
     int dy = 0;
 
     switch (vertex_id) {
-    case 28: dx = -42; dy = -34; break; // 上海赛车场
-    case 27: dx = -42; dy = -34; break; // 嘉定新城
-    case 26: dx = 14;  dy = -24; break; // 马陆
-    case 25: dx = 14;  dy = -24; break; // 陈翔公路
-    case 24: dx = 14;  dy = -24; break; // 南翔
-    case 29: dx = -92; dy = -18; break; // 昌吉东路
-    case 30: dx = 12;  dy = 16;  break; // 上海汽车城
+        case 28: dx = -42;  dy = -34; break; // 上海赛车场
+        case 27: dx = -42;  dy = -34; break; // 嘉定新城
+        case 26: dx = 14;   dy = -24; break; // 马陆
+        case 25: dx = 14;   dy = -24; break; // 陈翔公路
+        case 24: dx = 14;   dy = -24; break; // 南翔
+        case 29: dx = -120; dy = -42; break; // 昌吉东路
+        case 30: dx = -78;  dy = 24;  break; // 上海汽车城
 
-    case 64: dx = 16;  dy = -30; break; // 昌吉东路站
-    case 65: dx = -68; dy = -28; break; // 双浦路
-    case 66: dx = 14;  dy = -28; break; // 于塘南路
-    case 67: dx = 14;  dy = -28; break; // 望融路
-    case 68: dx = -82; dy = 12;  break; // 安虹北路
-    case 69: dx = 14;  dy = -30; break; // 绿苑路
-    case 70: dx = 14;  dy = 12;  break; // 安谐路
-    case 71: dx = 14;  dy = -28; break; // 于田路
-    case 72: dx = 14;  dy = 12;  break; // 安虹路
-    case 73: dx = -92; dy = 14;  break; // 二十三号桥
+        case 64: dx = 22;   dy = -38; break; // 昌吉东路站
+        case 65: dx = -100; dy = -26; break; // 双浦路
+        case 66: dx = -40;  dy = 28;  break; // 于塘南路
+        case 67: dx = -40;  dy = 22;  break; // 望融路
+        case 68: dx = -100; dy = 20;  break; // 安虹北路
+        case 69: dx = 20;   dy = 20;  break; // 绿苑路
+        case 70: dx = 18;   dy = 12;  break; // 安谐路
+        case 71: dx = -80;  dy = 14;  break; // 于田路
+        case 72: dx = 20;   dy = -34; break; // 安虹路
+        case 73: dx = -100; dy = 20;  break; // 二十三号桥
 
-    case 47: dx = -58; dy = -32; break; // 封浜地铁
-    case 74: dx = 16;  dy = 14;  break; // 封浜公交站
-    case 75: dx = -62; dy = 14;  break; // 翔江路
-    case 76: dx = 16;  dy = -30; break; // 曹丰路
-    case 77: dx = -74; dy = 14;  break; // 宝园五路
-    case 78: dx = 16;  dy = -30; break; // 宝园七路
-    case 79: dx = -62; dy = 14;  break; // 联西路
-    case 80: dx = 16;  dy = -30; break; // 联群路
-    case 81: dx = -62; dy = 14;  break; // 星塔路
-    case 82: dx = 16;  dy = -30; break; // 许家东街村
-    case 83: dx = -70; dy = 14;  break; // 新黄公路
-    case 84: dx = 16;  dy = -30; break; // 嘉松北路
-    default: return false;
-}
+        case 47: dx = -62;  dy = -36; break; // 封浜地铁
+        case 74: dx = 18;   dy = 12;  break; // 封浜公交站
+        case 75: dx = 18;   dy = -32; break; // 翔江路
+        case 76: dx = -70;  dy = 14;  break; // 曹丰路
+        case 77: dx = 18;   dy = -32; break; // 宝园五路
+        case 78: dx = -78;  dy = 14;  break; // 宝园七路
+        case 79: dx = 18;   dy = -32; break; // 联西路
+        case 80: dx = -70;  dy = 14;  break; // 联群路
+        case 81: dx = 18;   dy = -32; break; // 星塔路
+        case 82: dx = -86;  dy = 14;  break; // 许家东街村
+        case 83: dx = 18;   dy = -32; break; // 新黄公路
+        case 84: dx = -78;  dy = 14;  break; // 嘉松北路
+        default: return false;
+    }
 
     rectangle.left = point.x + dx;
     rectangle.top = point.y + dy;
