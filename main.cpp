@@ -1619,33 +1619,19 @@ screen_point get_total_map_point(const vertex vertices[],
         logical_y = 235;
     }
 
-    // 嘉定公交总览采用人工示意坐标：两条校区接驳线分开排布，822沿封浜至嘉定校区方向展开
+    // 嘉定周边优先保持CSV中的真实相对关系；仅将822整理成封浜至嘉定校区的连续走廊
     switch (physical_vertex) {
-        // 嘉定西侧两条公交走廊：保持与昌吉东路、上海汽车城的换乘关系，同时避免节点堆叠
-        case 64: logical_x = 105; logical_y = 130; break; // 昌吉东路站
-        case 65: logical_x = 80;  logical_y = 145; break; // 双浦路
-        case 66: logical_x = 58;  logical_y = 162; break; // 于塘南路
-        case 67: logical_x = 52;  logical_y = 185; break; // 望融路
-        case 68: logical_x = 78;  logical_y = 207; break; // 安虹北路
-        case 69: logical_x = 115; logical_y = 220; break; // 绿苑路
-
-        case 70: logical_x = 72;  logical_y = 158; break; // 安谐路
-        case 71: logical_x = 92;  logical_y = 180; break; // 于田路
-        case 72: logical_x = 112; logical_y = 200; break; // 安虹路
-        case 73: logical_x = 132; logical_y = 218; break; // 二十三号桥
-
-        // 822路：封浜公交站几乎贴住封浜地铁站，再沿直线向嘉定校区收束
-        case 74: logical_x = 317; logical_y = 357; break; // 封浜公交站
-        case 75: logical_x = 303; logical_y = 347; break; // 翔江路
-        case 76: logical_x = 289; logical_y = 337; break; // 曹丰路
-        case 77: logical_x = 275; logical_y = 327; break; // 宝园五路
-        case 78: logical_x = 261; logical_y = 317; break; // 宝园七路
-        case 79: logical_x = 247; logical_y = 307; break; // 联西路
-        case 80: logical_x = 233; logical_y = 297; break; // 联群路
-        case 81: logical_x = 219; logical_y = 287; break; // 星塔路
-        case 82: logical_x = 205; logical_y = 277; break; // 许家东街村
-        case 83: logical_x = 191; logical_y = 267; break; // 新黄公路
-        case 84: logical_x = 177; logical_y = 257; break; // 嘉松北路
+        case 74: logical_x = 318; logical_y = 364; break; // 封浜公交站，紧邻封浜地铁站
+        case 75: logical_x = 303; logical_y = 354; break; // 翔江路
+        case 76: logical_x = 288; logical_y = 344; break; // 曹丰路
+        case 77: logical_x = 273; logical_y = 334; break; // 宝园五路
+        case 78: logical_x = 258; logical_y = 324; break; // 宝园七路
+        case 79: logical_x = 243; logical_y = 314; break; // 联西路
+        case 80: logical_x = 228; logical_y = 304; break; // 联群路
+        case 81: logical_x = 213; logical_y = 294; break; // 星塔路
+        case 82: logical_x = 198; logical_y = 284; break; // 许家东街村
+        case 83: logical_x = 183; logical_y = 274; break; // 新黄公路
+        case 84: logical_x = 168; logical_y = 264; break; // 嘉松北路
         default: break;
     }
 
@@ -2121,7 +2107,7 @@ int score_station_label_candidate(
         || candidate.bottom > ui_layout::network_bottom - 8)
         return INT_MAX / 4;
 
-    int score = distance * 3;
+    int score = distance * 6;
 
     for (int i = 0; i < placed_number; i++) {
         int overlap_area = get_label_overlap_area(candidate, placed_rectangles[i]);
@@ -2170,14 +2156,14 @@ int score_station_label_candidate(
   功    能：在站点附近多个候选位置中选择最清楚的位置
   输入参数：站点坐标、标签宽高、已有标签和全部节点
   返 回 值：评分最低的候选矩形
-  说    明：最大偏移78像素，不再把站名拉到很远并连大量灰线
+  说    明：最大偏移64像素，优先保持站名与所属站点的视觉邻近关系
 ***************************************************************************/
 station_label_rectangle choose_station_label_rectangle(
     int center_x, int center_y, int label_width, int label_height,
     const station_label_rectangle placed_rectangles[], int placed_number,
     const vertex vertices[], int vertex_number, int current_vertex)
 {
-    const int distances[] = { 12, 22, 34, 48, 64, 82, 104, 128 };
+    const int distances[] = { 12, 22, 34, 48, 64 };
     const int distance_number = sizeof(distances) / sizeof(distances[0]);
 
     station_label_rectangle best_candidate;
@@ -2273,28 +2259,43 @@ bool get_manual_station_label_rectangle(int vertex_id,
     int dy = 0;
 
     switch (vertex_id) {
+        // 11号线嘉定段
         case 28: dx = -42;  dy = -34; break; // 上海赛车场
         case 27: dx = -42;  dy = -34; break; // 嘉定新城
         case 26: dx = 14;   dy = -24; break; // 马陆
         case 25: dx = 14;   dy = -24; break; // 陈翔公路
         case 24: dx = 14;   dy = -24; break; // 南翔
-        case 29: dx = -120; dy = -42; break; // 昌吉东路
-        case 30: dx = -78;  dy = 24;  break; // 上海汽车城
+        case 29: dx = -110; dy = -38; break; // 昌吉东路
+        case 30: dx = -70;  dy = 28;  break; // 上海汽车城
 
+        // 昌吉东路、上海汽车城与嘉定校区之间的两条公交走廊
+        case 64: dx = 18;   dy = -34; break; // 昌吉东路站
+        case 65: dx = -70;  dy = -28; break; // 双浦路
+        case 66: dx = 2;    dy = -40; break; // 于塘南路
+        case 67: dx = 16;   dy = -10; break; // 望融路
+        case 68: dx = -78;  dy = 18;  break; // 安虹北路
+        case 69: dx = 18;   dy = -34; break; // 绿苑路
+        case 70: dx = 20;   dy = -40; break; // 安谐路
+        case 71: dx = 18;   dy = 16;  break; // 于田路
+        case 72: dx = -78;  dy = 18;  break; // 安虹路
+        case 73: dx = -94;  dy = 18;  break; // 二十三号桥
 
-        case 46: dx = 14;   dy = -46; break; // 乐秀路
-        case 47: dx = -56;  dy = 22;  break; // 封浜地铁
-        case 74: dx = 20;   dy = 24;  break; // 封浜公交站
-        case 75: dx = -88;  dy = -44; break; // 翔江路
-        case 76: dx = -70;  dy = 14;  break; // 曹丰路
-        case 77: dx = 18;   dy = -32; break; // 宝园五路
-        case 78: dx = -78;  dy = 14;  break; // 宝园七路
-        case 79: dx = 18;   dy = -32; break; // 联西路
-        case 80: dx = -70;  dy = 14;  break; // 联群路
-        case 81: dx = 18;   dy = -32; break; // 星塔路
-        case 82: dx = -86;  dy = 14;  break; // 许家东街村
-        case 83: dx = 18;   dy = -32; break; // 新黄公路
-        case 84: dx = -78;  dy = 14;  break; // 嘉松北路
+        // 14号线封浜与822换乘区域
+        case 46: dx = -58;  dy = -38; break; // 乐秀路
+        case 47: dx = -68;  dy = 18;  break; // 封浜地铁
+        case 74: dx = 20;   dy = 18;  break; // 封浜公交站
+        case 75: dx = -72;  dy = -34; break; // 翔江路
+
+        // 822其余站点沿线路两侧交错排布
+        case 76: dx = 18;   dy = 12;  break; // 曹丰路
+        case 77: dx = -92;  dy = -32; break; // 宝园五路
+        case 78: dx = 18;   dy = 12;  break; // 宝园七路
+        case 79: dx = -72;  dy = -32; break; // 联西路
+        case 80: dx = 18;   dy = 12;  break; // 联群路
+        case 81: dx = -72;  dy = -32; break; // 星塔路
+        case 82: dx = 18;   dy = 12;  break; // 许家东街村
+        case 83: dx = -94;  dy = -32; break; // 新黄公路
+        case 84: dx = 18;   dy = 12;  break; // 嘉松北路
         default: return false;
     }
 
@@ -2359,7 +2360,7 @@ void draw_all_station_names(const vertex vertices[], int vertex_number)
 
     station_label_rectangle placed_rectangles[physical_vertex_number];
     int placed_number = 0;
-    set_map_font(13);
+    set_map_font(20);
 
     for (int i = 0; i < label_number; i++) {
         int vertex_id = label_vertices[i];
